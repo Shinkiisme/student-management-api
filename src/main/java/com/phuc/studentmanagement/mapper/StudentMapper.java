@@ -9,10 +9,10 @@ public final class StudentMapper {
     }
 
     public static Student toStudent(StudentRequestDTO request) {
-        return new Student(request.name(), request.age());
+        return new Student(request.studentCode(), request.name(), request.age());
     }
 
     public static StudentResponseDTO toResponseDTO(Student student) {
-        return new StudentResponseDTO(student.getId(), student.getName(), student.getAge());
+        return new StudentResponseDTO(student.getId(), student.getStudentCode(), student.getName(), student.getAge());
     }
 }

@@ -5,9 +5,11 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 
 import com.phuc.studentmanagement.exception.ResourceInUseException;
+import com.phuc.studentmanagement.exception.StudentCodeAlreadyExistsException;
 import com.phuc.studentmanagement.model.Student;
 import com.phuc.studentmanagement.repository.StudentRepository;
 
@@ -32,11 +34,19 @@ public class StudentService {
     }
 
     public Student addStudent(Student student) {
-        return studentRepository.insert(student);
+        try {
+            return studentRepository.insert(student);
+        } catch (DuplicateKeyException exception) {
+            throw new StudentCodeAlreadyExistsException(student.getStudentCode(), exception);
+        }
     }
 
     public Optional<Student> updateStudent(int id, Student student) {
-        return studentRepository.update(id, student);
+        try {
+            return studentRepository.update(id, student);
+        } catch (DuplicateKeyException exception) {
+            throw new StudentCodeAlreadyExistsException(student.getStudentCode(), exception);
+        }
     }
 
     public boolean deleteStudent(int id) {

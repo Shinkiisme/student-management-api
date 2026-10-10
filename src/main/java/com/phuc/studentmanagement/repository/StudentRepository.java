@@ -14,6 +14,7 @@ public class StudentRepository {
         private final JdbcTemplate jdbcTemplate;
         private static final RowMapper<Student> STUDENT_ROW_MAPPER = (rs, rowNum) -> new Student(
                         rs.getInt("id"),
+                        rs.getString("student_code"),
                         rs.getString("name"),
                         rs.getInt("age"));
 
@@ -23,7 +24,7 @@ public class StudentRepository {
 
         public List<Student> findAll() {
                 String sql = """
-                                SELECT id, name, age
+                                SELECT id, student_code, name, age
                                 FROM students
                                 ORDER BY id
                                 """;
@@ -33,7 +34,7 @@ public class StudentRepository {
 
         public List<Student> findByAge(int age) {
                 String sql = """
-                                SELECT id, name, age
+                                SELECT id, student_code, name, age
                                 FROM students
                                 WHERE age = ?
                                 ORDER BY id
@@ -44,7 +45,7 @@ public class StudentRepository {
 
         public Optional<Student> findById(int id) {
                 String sql = """
-                                SELECT id, name, age
+                                SELECT id, student_code, name, age
                                 FROM students
                                 WHERE id = ?
                                 """;
@@ -56,13 +57,14 @@ public class StudentRepository {
 
         public Student insert(Student student) {
                 String sql = """
-                                INSERT INTO students(name, age)
-                                VALUES (?, ?)
-                                RETURNING id, name, age
+                                INSERT INTO students(student_code, name, age)
+                                VALUES (?, ?, ?)
+                                RETURNING id, student_code, name, age
                                         """;
 
                 return jdbcTemplate.queryForObject(sql,
                                 STUDENT_ROW_MAPPER,
+                                student.getStudentCode(),
                                 student.getName(),
                                 student.getAge());
         }
@@ -70,13 +72,14 @@ public class StudentRepository {
         public Optional<Student> update(int id, Student student) {
                 String sql = """
                                 UPDATE students
-                                SET name = ?, age = ?
+                                SET student_code = ?, name = ?, age = ?
                                 WHERE id = ?
-                                RETURNING id, name, age
+                                RETURNING id, student_code, name, age
                                         """;
 
                 return jdbcTemplate.query(sql,
                                 STUDENT_ROW_MAPPER,
+                                student.getStudentCode(),
                                 student.getName(),
                                 student.getAge(),
                                 id)

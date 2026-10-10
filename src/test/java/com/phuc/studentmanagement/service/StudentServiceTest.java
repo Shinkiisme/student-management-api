@@ -19,8 +19,10 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 
 import com.phuc.studentmanagement.exception.ResourceInUseException;
+import com.phuc.studentmanagement.exception.StudentCodeAlreadyExistsException;
 import com.phuc.studentmanagement.model.Student;
 import com.phuc.studentmanagement.repository.StudentRepository;
 
@@ -35,39 +37,37 @@ class StudentServiceTest {
 
     @Test
     void getAllStudents_shouldReturnAllStudents_whenAgeIsNull() {
-        Student student1 = new Student(1, "Phuc", 20);
-        Student student2 = new Student(2, "Huy", 19);
+        Student student1 = new Student(1, "24120001", "Phuc", 20);
+        Student student2 = new Student(2, "24120002", "Huy", 19);
 
         List<Student> expectedStudents = List.of(student1, student2);
 
         when(studentRepository.findAll()).thenReturn(expectedStudents);
 
-        List<Student> actualStudents = studentService.getAllStudents(null);
+        List<Student> result = studentService.getAllStudents(null);
 
-        assertEquals(expectedStudents, actualStudents);
-
+        assertEquals(expectedStudents, result);
         verify(studentRepository).findAll();
     }
 
     @Test
     void getAllStudents_shouldFilterByAge_whenAgeIsProvided() {
-        Student student1 = new Student(1, "Phuc", 20);
-        Student student2 = new Student(3, "Nam", 20);
+        Student student1 = new Student(1, "24120001", "Phuc", 20);
+        Student student2 = new Student(3, "24120003", "Nam", 20);
 
         List<Student> expectedStudents = List.of(student1, student2);
 
         when(studentRepository.findByAge(20)).thenReturn(expectedStudents);
 
-        List<Student> actualStudents = studentService.getAllStudents(20);
+        List<Student> result = studentService.getAllStudents(20);
 
-        assertEquals(expectedStudents, actualStudents);
-
+        assertEquals(expectedStudents, result);
         verify(studentRepository).findByAge(20);
     }
 
     @Test
     void getStudentById_shouldReturnStudent_whenStudentExists() {
-        Student student = new Student(1, "Phuc", 20);
+        Student student = new Student(1, "24120001", "Phuc", 20);
 
         when(studentRepository.findById(1))
                 .thenReturn(Optional.of(student));
@@ -76,7 +76,6 @@ class StudentServiceTest {
 
         assertTrue(result.isPresent());
         assertSame(student, result.get());
-
         verify(studentRepository).findById(1);
     }
 
@@ -88,29 +87,46 @@ class StudentServiceTest {
         Optional<Student> result = studentService.getStudentById(999);
 
         assertTrue(result.isEmpty());
-
         verify(studentRepository).findById(999);
     }
 
     @Test
-    void addStudent_shouldReturnCreatedStudent() {
-        Student student = new Student("Phuc", 20);
-        Student createdStudent = new Student(1, "Phuc", 20);
+    void addStudent_shouldReturnCreatedStudent_whenCodeIsUnique() {
+        Student student = new Student("24120001", "Phuc", 20);
+        Student createdStudent = new Student(1, "24120001", "Phuc", 20);
 
-        when(studentRepository.insert(student))
-                .thenReturn(createdStudent);
+        when(studentRepository.insert(student)).thenReturn(createdStudent);
 
         Student result = studentService.addStudent(student);
 
         assertSame(createdStudent, result);
+        verify(studentRepository).insert(student);
+    }
 
+    @Test
+    void addStudent_shouldThrowStudentCodeAlreadyExistsException_whenCodeIsDuplicate() {
+        Student student = new Student("24120001", "Phuc", 20);
+
+        DuplicateKeyException expectedCause = new DuplicateKeyException("Duplicate student code");
+
+        when(studentRepository.insert(student)).thenThrow(expectedCause);
+
+        StudentCodeAlreadyExistsException exception = assertThrows(
+                StudentCodeAlreadyExistsException.class,
+                () -> studentService.addStudent(student));
+
+        assertEquals(
+                "Student code 24120001 already exists",
+                exception.getMessage());
+
+        assertSame(expectedCause, exception.getCause());
         verify(studentRepository).insert(student);
     }
 
     @Test
     void updateStudent_shouldReturnUpdatedStudent_whenStudentExists() {
-        Student student = new Student("Huy Nguyen", 22);
-        Student updatedStudent = new Student(2, "Huy Nguyen", 22);
+        Student student = new Student("24120002", "Huy Nguyen", 22);
+        Student updatedStudent = new Student(2, "24120002", "Huy Nguyen", 22);
 
         when(studentRepository.update(2, student))
                 .thenReturn(Optional.of(updatedStudent));
@@ -119,13 +135,12 @@ class StudentServiceTest {
 
         assertTrue(result.isPresent());
         assertSame(updatedStudent, result.get());
-
         verify(studentRepository).update(2, student);
     }
 
     @Test
     void updateStudent_shouldReturnEmpty_whenStudentDoesNotExist() {
-        Student student = new Student("Nam", 22);
+        Student student = new Student("24120003", "Nam", 22);
 
         when(studentRepository.update(999, student))
                 .thenReturn(Optional.empty());
@@ -133,8 +148,27 @@ class StudentServiceTest {
         Optional<Student> result = studentService.updateStudent(999, student);
 
         assertTrue(result.isEmpty());
-
         verify(studentRepository).update(999, student);
+    }
+
+    @Test
+    void updateStudent_shouldThrowStudentCodeAlreadyExistsException_whenCodeIsDuplicate() {
+        Student student = new Student("24120001", "Huy", 20);
+
+        DuplicateKeyException expectedCause = new DuplicateKeyException("Duplicate student code");
+
+        when(studentRepository.update(2, student)).thenThrow(expectedCause);
+
+        StudentCodeAlreadyExistsException exception = assertThrows(
+                StudentCodeAlreadyExistsException.class,
+                () -> studentService.updateStudent(2, student));
+
+        assertEquals(
+                "Student code 24120001 already exists",
+                exception.getMessage());
+
+        assertSame(expectedCause, exception.getCause());
+        verify(studentRepository).update(2, student);
     }
 
     @Test
@@ -144,7 +178,6 @@ class StudentServiceTest {
         boolean result = studentService.deleteStudent(1);
 
         assertTrue(result);
-
         verify(studentRepository).deleteById(1);
     }
 
@@ -155,7 +188,6 @@ class StudentServiceTest {
         boolean result = studentService.deleteStudent(999);
 
         assertFalse(result);
-
         verify(studentRepository).deleteById(999);
     }
 
@@ -167,8 +199,7 @@ class StudentServiceTest {
                 "Cannot delete student",
                 sqlException);
 
-        when(studentRepository.deleteById(1))
-                .thenThrow(expectedCause);
+        when(studentRepository.deleteById(1)).thenThrow(expectedCause);
 
         ResourceInUseException exception = assertThrows(
                 ResourceInUseException.class,
@@ -179,7 +210,6 @@ class StudentServiceTest {
                 exception.getMessage());
 
         assertSame(expectedCause, exception.getCause());
-
         verify(studentRepository).deleteById(1);
     }
 
@@ -191,15 +221,13 @@ class StudentServiceTest {
                 "Database constraint violation",
                 sqlException);
 
-        when(studentRepository.deleteById(1))
-                .thenThrow(expectedException);
+        when(studentRepository.deleteById(1)).thenThrow(expectedException);
 
         DataIntegrityViolationException actualException = assertThrows(
                 DataIntegrityViolationException.class,
                 () -> studentService.deleteStudent(1));
 
         assertSame(expectedException, actualException);
-
         verify(studentRepository).deleteById(1);
     }
 }

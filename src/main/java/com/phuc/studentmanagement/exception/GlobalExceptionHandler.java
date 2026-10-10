@@ -31,6 +31,13 @@ public class GlobalExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(StudentCodeAlreadyExistsException.class)
+    public ProblemDetail handleStudentCodeAlreadyExistsException(StudentCodeAlreadyExistsException exception) {
+        return ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT,
+                exception.getMessage());
+    }
+
     @ExceptionHandler(CourseCodeAlreadyExistsException.class)
     public ProblemDetail handleCourseCodeAlreadyExists(CourseCodeAlreadyExistsException exception) {
         return ProblemDetail.forStatusAndDetail(
