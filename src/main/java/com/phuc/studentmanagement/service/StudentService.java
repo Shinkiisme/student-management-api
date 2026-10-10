@@ -1,10 +1,13 @@
 package com.phuc.studentmanagement.service;
 
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
+import com.phuc.studentmanagement.exception.ResourceInUseException;
 import com.phuc.studentmanagement.model.Student;
 import com.phuc.studentmanagement.repository.StudentRepository;
 
@@ -37,6 +40,16 @@ public class StudentService {
     }
 
     public boolean deleteStudent(int id) {
-        return studentRepository.deleteById(id);
+        try {
+            return studentRepository.deleteById(id);
+        } catch (DataIntegrityViolationException exception) {
+            Throwable cause = exception.getMostSpecificCause();
+
+            if (cause instanceof SQLException sqlException && "23503".equals(sqlException.getSQLState())) {
+                throw new ResourceInUseException("Student", id, exception);
+            }
+
+            throw exception;
+        }
     }
 }

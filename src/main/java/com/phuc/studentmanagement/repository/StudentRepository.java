@@ -58,7 +58,7 @@ public class StudentRepository {
                 String sql = """
                                 INSERT INTO students(name, age)
                                 VALUES (?, ?)
-                                RETURNING id, name, age;
+                                RETURNING id, name, age
                                         """;
 
                 return jdbcTemplate.queryForObject(sql,

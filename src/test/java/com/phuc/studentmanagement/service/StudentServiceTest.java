@@ -3,15 +3,13 @@ package com.phuc.studentmanagement.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,7 +18,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
+import com.phuc.studentmanagement.exception.ResourceInUseException;
 import com.phuc.studentmanagement.model.Student;
 import com.phuc.studentmanagement.repository.StudentRepository;
 
@@ -38,51 +38,46 @@ class StudentServiceTest {
         Student student1 = new Student(1, "Phuc", 20);
         Student student2 = new Student(2, "Huy", 19);
 
-        when(studentRepository.findAll())
-                .thenReturn(List.of(student1, student2));
+        List<Student> expectedStudents = List.of(student1, student2);
 
-        List<Student> result = studentService.getAllStudents(null);
+        when(studentRepository.findAll()).thenReturn(expectedStudents);
 
-        assertEquals(2, result.size());
-        assertSame(student1, result.get(0));
-        assertSame(student2, result.get(1));
+        List<Student> actualStudents = studentService.getAllStudents(null);
 
-        verify(studentRepository, times(1)).findAll();
-        verify(studentRepository, never()).findByAge(anyInt());
+        assertEquals(expectedStudents, actualStudents);
+
+        verify(studentRepository).findAll();
     }
 
     @Test
-    void getAllStudents_shouldReturnFilteredStudents_whenAgeIsProvided() {
+    void getAllStudents_shouldFilterByAge_whenAgeIsProvided() {
         Student student1 = new Student(1, "Phuc", 20);
         Student student2 = new Student(3, "Nam", 20);
 
-        when(studentRepository.findByAge(20))
-                .thenReturn(List.of(student1, student2));
+        List<Student> expectedStudents = List.of(student1, student2);
 
-        List<Student> result = studentService.getAllStudents(20);
+        when(studentRepository.findByAge(20)).thenReturn(expectedStudents);
 
-        assertEquals(2, result.size());
-        assertTrue(result.stream().allMatch(student -> student.getAge() == 20));
+        List<Student> actualStudents = studentService.getAllStudents(20);
 
-        verify(studentRepository, times(1)).findByAge(20);
-        verify(studentRepository, never()).findAll();
+        assertEquals(expectedStudents, actualStudents);
+
+        verify(studentRepository).findByAge(20);
     }
 
     @Test
     void getStudentById_shouldReturnStudent_whenStudentExists() {
-        Student student = new Student(2, "Phuc", 20);
+        Student student = new Student(1, "Phuc", 20);
 
-        when(studentRepository.findById(2))
+        when(studentRepository.findById(1))
                 .thenReturn(Optional.of(student));
 
-        Optional<Student> result = studentService.getStudentById(2);
+        Optional<Student> result = studentService.getStudentById(1);
 
         assertTrue(result.isPresent());
-        assertEquals(2, result.get().getId());
-        assertEquals("Phuc", result.get().getName());
-        assertEquals(20, result.get().getAge());
+        assertSame(student, result.get());
 
-        verify(studentRepository, times(1)).findById(2);
+        verify(studentRepository).findById(1);
     }
 
     @Test
@@ -94,31 +89,28 @@ class StudentServiceTest {
 
         assertTrue(result.isEmpty());
 
-        verify(studentRepository, times(1)).findById(999);
+        verify(studentRepository).findById(999);
     }
 
     @Test
     void addStudent_shouldReturnCreatedStudent() {
-        Student student = new Student("Nam", 22);
-        Student createdStudent = new Student(4, "Nam", 22);
+        Student student = new Student("Phuc", 20);
+        Student createdStudent = new Student(1, "Phuc", 20);
 
         when(studentRepository.insert(student))
                 .thenReturn(createdStudent);
 
         Student result = studentService.addStudent(student);
 
-        assertNotNull(result);
-        assertEquals(4, result.getId());
-        assertEquals("Nam", result.getName());
-        assertEquals(22, result.getAge());
+        assertSame(createdStudent, result);
 
-        verify(studentRepository, times(1)).insert(student);
+        verify(studentRepository).insert(student);
     }
 
     @Test
     void updateStudent_shouldReturnUpdatedStudent_whenStudentExists() {
-        Student student = new Student("Phuc Nguyen", 21);
-        Student updatedStudent = new Student(2, "Phuc Nguyen", 21);
+        Student student = new Student("Huy Nguyen", 22);
+        Student updatedStudent = new Student(2, "Huy Nguyen", 22);
 
         when(studentRepository.update(2, student))
                 .thenReturn(Optional.of(updatedStudent));
@@ -126,11 +118,9 @@ class StudentServiceTest {
         Optional<Student> result = studentService.updateStudent(2, student);
 
         assertTrue(result.isPresent());
-        assertEquals(2, result.get().getId());
-        assertEquals("Phuc Nguyen", result.get().getName());
-        assertEquals(21, result.get().getAge());
+        assertSame(updatedStudent, result.get());
 
-        verify(studentRepository, times(1)).update(2, student);
+        verify(studentRepository).update(2, student);
     }
 
     @Test
@@ -144,30 +134,72 @@ class StudentServiceTest {
 
         assertTrue(result.isEmpty());
 
-        verify(studentRepository, times(1)).update(999, student);
+        verify(studentRepository).update(999, student);
     }
 
     @Test
     void deleteStudent_shouldReturnTrue_whenStudentExists() {
-        when(studentRepository.deleteById(2))
-                .thenReturn(true);
+        when(studentRepository.deleteById(1)).thenReturn(true);
 
-        boolean result = studentService.deleteStudent(2);
+        boolean result = studentService.deleteStudent(1);
 
         assertTrue(result);
 
-        verify(studentRepository, times(1)).deleteById(2);
+        verify(studentRepository).deleteById(1);
     }
 
     @Test
     void deleteStudent_shouldReturnFalse_whenStudentDoesNotExist() {
-        when(studentRepository.deleteById(999))
-                .thenReturn(false);
+        when(studentRepository.deleteById(999)).thenReturn(false);
 
         boolean result = studentService.deleteStudent(999);
 
         assertFalse(result);
 
-        verify(studentRepository, times(1)).deleteById(999);
+        verify(studentRepository).deleteById(999);
+    }
+
+    @Test
+    void deleteStudent_shouldThrowResourceInUseException_whenStudentIsReferenced() {
+        SQLException sqlException = new SQLException("Foreign key violation", "23503");
+
+        DataIntegrityViolationException expectedCause = new DataIntegrityViolationException(
+                "Cannot delete student",
+                sqlException);
+
+        when(studentRepository.deleteById(1))
+                .thenThrow(expectedCause);
+
+        ResourceInUseException exception = assertThrows(
+                ResourceInUseException.class,
+                () -> studentService.deleteStudent(1));
+
+        assertEquals(
+                "Student with id 1 cannot be deleted because it is in use",
+                exception.getMessage());
+
+        assertSame(expectedCause, exception.getCause());
+
+        verify(studentRepository).deleteById(1);
+    }
+
+    @Test
+    void deleteStudent_shouldRethrowDataIntegrityViolationException_whenErrorIsNotForeignKey() {
+        SQLException sqlException = new SQLException("Check constraint violation", "23514");
+
+        DataIntegrityViolationException expectedException = new DataIntegrityViolationException(
+                "Database constraint violation",
+                sqlException);
+
+        when(studentRepository.deleteById(1))
+                .thenThrow(expectedException);
+
+        DataIntegrityViolationException actualException = assertThrows(
+                DataIntegrityViolationException.class,
+                () -> studentService.deleteStudent(1));
+
+        assertSame(expectedException, actualException);
+
+        verify(studentRepository).deleteById(1);
     }
 }

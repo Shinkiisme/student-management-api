@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.phuc.studentmanagement.dto.StudentRequestDTO;
 import com.phuc.studentmanagement.dto.StudentResponseDTO;
+import com.phuc.studentmanagement.exception.ResourceNotFoundException;
 import com.phuc.studentmanagement.mapper.StudentMapper;
 import com.phuc.studentmanagement.model.Student;
 import com.phuc.studentmanagement.service.StudentService;
@@ -42,7 +43,7 @@ public class StudentController {
         return studentService.getStudentById(id)
                 .map(StudentMapper::toResponseDTO)
                 .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseThrow(() -> new ResourceNotFoundException("Student", id));
     }
 
     @PostMapping
@@ -62,13 +63,15 @@ public class StudentController {
         return studentService.updateStudent(id, student)
                 .map(StudentMapper::toResponseDTO)
                 .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseThrow(() -> new ResourceNotFoundException("Student", id));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteStudent(@PathVariable int id) {
-        return studentService.deleteStudent(id)
-                ? ResponseEntity.noContent().build()
-                : ResponseEntity.notFound().build();
+        if (studentService.deleteStudent(id)) {
+            return ResponseEntity.noContent().build();
+        }
+
+        throw new ResourceNotFoundException("Student", id);
     }
 }
