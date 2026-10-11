@@ -21,9 +21,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 
+import com.phuc.studentmanagement.exception.InvalidPaginationException;
 import com.phuc.studentmanagement.exception.ResourceInUseException;
 import com.phuc.studentmanagement.exception.StudentCodeAlreadyExistsException;
 import com.phuc.studentmanagement.model.Student;
+import com.phuc.studentmanagement.pagination.PageRequest;
+import com.phuc.studentmanagement.pagination.PageResult;
+import com.phuc.studentmanagement.pagination.SortDirection;
 import com.phuc.studentmanagement.repository.StudentRepository;
 
 @ExtendWith(MockitoExtension.class)
@@ -88,6 +92,111 @@ class StudentServiceTest {
 
         assertTrue(result.isEmpty());
         verify(studentRepository).findById(999);
+    }
+
+    @Test
+    void getStudentsPage_shouldReturnPage_whenAgeIsNull() {
+        Student student1 = new Student(1, "24120001", "Phuc", 20);
+        Student student2 = new Student(2, "24120002", "Huy", 19);
+
+        PageRequest request = new PageRequest(
+                0, 2, "id", SortDirection.ASC);
+
+        PageResult<Student> expectedPage = new PageResult<>(
+                List.of(student1, student2),
+                0,
+                2,
+                5);
+
+        when(studentRepository.findPage(request, null))
+                .thenReturn(expectedPage);
+
+        PageResult<Student> result = studentService.getStudentsPage(request, null);
+
+        assertSame(expectedPage, result);
+        assertEquals(2, result.content().size());
+        assertEquals(0, result.page());
+        assertEquals(2, result.size());
+        assertEquals(5, result.totalElements());
+        assertEquals(3, result.totalPages());
+
+        verify(studentRepository).findPage(request, null);
+    }
+
+    @Test
+    void getStudentsPage_shouldReturnFilteredPage_whenAgeIsProvided() {
+        Student student1 = new Student(1, "24120001", "Phuc", 20);
+        Student student2 = new Student(3, "24120003", "Nam", 20);
+
+        PageRequest request = new PageRequest(
+                0, 2, "name", SortDirection.ASC);
+
+        PageResult<Student> expectedPage = new PageResult<>(
+                List.of(student2, student1),
+                0,
+                2,
+                2);
+
+        when(studentRepository.findPage(request, 20))
+                .thenReturn(expectedPage);
+
+        PageResult<Student> result = studentService.getStudentsPage(request, 20);
+
+        assertSame(expectedPage, result);
+        assertEquals(2, result.content().size());
+        assertTrue(result.content().stream()
+                .allMatch(student -> student.getAge() == 20));
+        assertEquals(2, result.totalElements());
+        assertEquals(1, result.totalPages());
+
+        verify(studentRepository).findPage(request, 20);
+    }
+
+    @Test
+    void getStudentsPage_shouldReturnEmptyPage_whenNoStudentsExist() {
+        PageRequest request = new PageRequest(
+                0, 10, "id", SortDirection.ASC);
+
+        PageResult<Student> expectedPage = new PageResult<>(
+                List.of(),
+                0,
+                10,
+                0);
+
+        when(studentRepository.findPage(request, null))
+                .thenReturn(expectedPage);
+
+        PageResult<Student> result = studentService.getStudentsPage(request, null);
+
+        assertSame(expectedPage, result);
+        assertTrue(result.content().isEmpty());
+        assertEquals(0, result.totalElements());
+        assertEquals(0, result.totalPages());
+
+        verify(studentRepository).findPage(request, null);
+    }
+
+    @Test
+    void getStudentsPage_shouldPropagateInvalidPaginationException_whenSortFieldIsInvalid() {
+        PageRequest request = new PageRequest(
+                0, 10, "invalid", SortDirection.ASC);
+
+        InvalidPaginationException expectedException = new InvalidPaginationException(
+                "Invalid sort field: invalid");
+
+        when(studentRepository.findPage(request, null))
+                .thenThrow(expectedException);
+
+        InvalidPaginationException actualException = assertThrows(
+                InvalidPaginationException.class,
+                () -> studentService.getStudentsPage(request, null));
+
+        assertSame(expectedException, actualException);
+        assertEquals(
+                "Invalid sort field: invalid",
+                actualException.getMessage());
+
+        verify(studentRepository).findPage(request, null);
     }
 
     @Test

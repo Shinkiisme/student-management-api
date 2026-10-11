@@ -65,4 +65,11 @@ public class GlobalExceptionHandler {
                 HttpStatus.CONFLICT,
                 exception.getMessage());
     }
+
+    @ExceptionHandler(InvalidPaginationException.class)
+    public ProblemDetail handleInvalidPaginationException(InvalidPaginationException exception) {
+        return ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                exception.getMessage());
+    }
 }

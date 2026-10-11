@@ -11,6 +11,8 @@ import org.springframework.stereotype.Service;
 import com.phuc.studentmanagement.exception.ResourceInUseException;
 import com.phuc.studentmanagement.exception.StudentCodeAlreadyExistsException;
 import com.phuc.studentmanagement.model.Student;
+import com.phuc.studentmanagement.pagination.PageRequest;
+import com.phuc.studentmanagement.pagination.PageResult;
 import com.phuc.studentmanagement.repository.StudentRepository;
 
 @Service
@@ -31,6 +33,10 @@ public class StudentService {
 
     public Optional<Student> getStudentById(int id) {
         return studentRepository.findById(id);
+    }
+
+    public PageResult<Student> getStudentsPage(PageRequest request, Integer age) {
+        return studentRepository.findPage(request, age);
     }
 
     public Student addStudent(Student student) {

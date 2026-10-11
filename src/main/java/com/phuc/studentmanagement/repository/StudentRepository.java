@@ -7,7 +7,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 
+import com.phuc.studentmanagement.exception.InvalidPaginationException;
 import com.phuc.studentmanagement.model.Student;
+import com.phuc.studentmanagement.pagination.PageRequest;
+import com.phuc.studentmanagement.pagination.PageResult;
 
 @Repository
 public class StudentRepository {
@@ -53,6 +56,71 @@ public class StudentRepository {
                 return jdbcTemplate.query(sql, STUDENT_ROW_MAPPER, id)
                                 .stream()
                                 .findFirst();
+        }
+
+        public PageResult<Student> findPage(PageRequest request, Integer age) {
+                String sortColumn = switch (request.sortBy()) {
+                        case "id" -> "id";
+                        case "studentCode" -> "student_code";
+                        case "name" -> "name";
+                        case "age" -> "age";
+                        default -> throw new InvalidPaginationException("Invalid sort field: " + request.sortBy());
+                };
+
+                String direction = request.direction().name();
+
+                String whereClause = age == null ? "" : "WHERE age = ?";
+
+                String orderClause = sortColumn.equals("id")
+                                ? "id " + direction
+                                : sortColumn + " " + direction + ", id ASC";
+
+                String dataSql = """
+                                SELECT id, student_code, name, age
+                                FROM students
+                                %s
+                                ORDER BY %s
+                                LIMIT ? OFFSET ?
+                                """.formatted(whereClause, orderClause);
+
+                String countSql = """
+                                SELECT COUNT(*)
+                                FROM students
+                                %s
+                                """.formatted(whereClause);
+
+                long offset = (long) request.page() * request.size();
+
+                long totalElements;
+                List<Student> students;
+
+                if (age == null) {
+                        totalElements = jdbcTemplate.queryForObject(countSql, Long.class);
+
+                        students = jdbcTemplate.query(
+                                        dataSql,
+                                        STUDENT_ROW_MAPPER,
+                                        request.size(),
+                                        offset);
+                } else {
+                        totalElements = jdbcTemplate.queryForObject(
+                                        countSql,
+                                        Long.class,
+                                        age);
+
+                        students = jdbcTemplate.query(
+                                        dataSql,
+                                        STUDENT_ROW_MAPPER,
+                                        age,
+                                        request.size(),
+                                        offset);
+                }
+
+                return new PageResult<>(
+                                students,
+                                request.page(),
+                                request.size(),
+                                totalElements);
         }
 
         public Student insert(Student student) {
