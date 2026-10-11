@@ -6,9 +6,9 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 public record StudentRequestDTO(
-        @NotBlank(message = "Student code cannot be empty") @Size(max = 20, message = "Student code must not exceed 20 characters") String studentCode,
+        @NotBlank(message = "Student code is required") @Size(max = 20, message = "Student code must not exceed 20 characters") String studentCode,
 
-        @NotBlank(message = "Name cannot be empty") @Size(max = 100, message = "Name must not exceed 100 characters") String name,
+        @NotBlank(message = "Name is required") @Size(max = 100, message = "Name must not exceed 100 characters") String name,
 
         @NotNull(message = "Age is required") @Min(value = 0, message = "Age cannot be negative") Integer age) {
 }

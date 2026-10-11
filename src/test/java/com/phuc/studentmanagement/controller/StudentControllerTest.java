@@ -171,9 +171,9 @@ class StudentControllerTest {
                                 .andExpect(jsonPath("$.detail")
                                                 .value("Request validation failed"))
                                 .andExpect(jsonPath("$.errors.studentCode")
-                                                .value("Student code cannot be empty"))
+                                                .value("Student code is required"))
                                 .andExpect(jsonPath("$.errors.name")
-                                                .value("Name cannot be empty"))
+                                                .value("Name is required"))
                                 .andExpect(jsonPath("$.errors.age")
                                                 .value("Age cannot be negative"));
 
@@ -211,7 +211,7 @@ class StudentControllerTest {
                                 .andExpect(status().isBadRequest())
                                 .andExpect(jsonPath("$.status").value(400))
                                 .andExpect(jsonPath("$.errors.studentCode")
-                                                .value("Student code cannot be empty"));
+                                                .value("Student code is required"));
 
                 verifyNoInteractions(studentService);
         }
@@ -331,9 +331,9 @@ class StudentControllerTest {
                                 .andExpect(jsonPath("$.detail")
                                                 .value("Request validation failed"))
                                 .andExpect(jsonPath("$.errors.studentCode")
-                                                .value("Student code cannot be empty"))
+                                                .value("Student code is required"))
                                 .andExpect(jsonPath("$.errors.name")
-                                                .value("Name cannot be empty"))
+                                                .value("Name is required"))
                                 .andExpect(jsonPath("$.errors.age")
                                                 .value("Age cannot be negative"));
 

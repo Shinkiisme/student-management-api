@@ -58,4 +58,11 @@ public class GlobalExceptionHandler {
                 HttpStatus.CONFLICT,
                 exception.getMessage());
     }
+
+    @ExceptionHandler(EnrollmentAlreadyExistsException.class)
+    public ProblemDetail handleEnrollmentAlreadyExistsException(EnrollmentAlreadyExistsException exception) {
+        return ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT,
+                exception.getMessage());
+    }
 }
