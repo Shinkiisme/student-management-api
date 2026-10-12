@@ -46,18 +46,6 @@ public class StudentRepository {
                 return jdbcTemplate.query(sql, STUDENT_ROW_MAPPER, age);
         }
 
-        public Optional<Student> findById(int id) {
-                String sql = """
-                                SELECT id, student_code, name, age
-                                FROM students
-                                WHERE id = ?
-                                """;
-
-                return jdbcTemplate.query(sql, STUDENT_ROW_MAPPER, id)
-                                .stream()
-                                .findFirst();
-        }
-
         public PageResult<Student> findPage(PageRequest request, Integer age) {
                 String sortColumn = switch (request.sortBy()) {
                         case "id" -> "id";
@@ -69,7 +57,9 @@ public class StudentRepository {
 
                 String direction = request.direction().name();
 
-                String whereClause = age == null ? "" : "WHERE age = ?";
+                String whereClause = age == null
+                                ? ""
+                                : "WHERE age = ?";
 
                 String orderClause = sortColumn.equals("id")
                                 ? "id " + direction
@@ -95,7 +85,9 @@ public class StudentRepository {
                 List<Student> students;
 
                 if (age == null) {
-                        totalElements = jdbcTemplate.queryForObject(countSql, Long.class);
+                        totalElements = jdbcTemplate.queryForObject(
+                                        countSql,
+                                        Long.class);
 
                         students = jdbcTemplate.query(
                                         dataSql,
@@ -121,6 +113,18 @@ public class StudentRepository {
                                 request.page(),
                                 request.size(),
                                 totalElements);
+        }
+
+        public Optional<Student> findById(int id) {
+                String sql = """
+                                SELECT id, student_code, name, age
+                                FROM students
+                                WHERE id = ?
+                                """;
+
+                return jdbcTemplate.query(sql, STUDENT_ROW_MAPPER, id)
+                                .stream()
+                                .findFirst();
         }
 
         public Student insert(Student student) {

@@ -1,6 +1,6 @@
 package com.phuc.studentmanagement.controller;
 
-import java.util.List;
+import java.util.Locale;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -10,13 +10,19 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.phuc.studentmanagement.dto.CourseRequestDTO;
 import com.phuc.studentmanagement.dto.CourseResponseDTO;
+import com.phuc.studentmanagement.dto.PageResponseDTO;
+import com.phuc.studentmanagement.exception.InvalidPaginationException;
 import com.phuc.studentmanagement.exception.ResourceNotFoundException;
 import com.phuc.studentmanagement.mapper.CourseMapper;
 import com.phuc.studentmanagement.model.Course;
+import com.phuc.studentmanagement.pagination.PageRequest;
+import com.phuc.studentmanagement.pagination.PageResult;
+import com.phuc.studentmanagement.pagination.SortDirection;
 import com.phuc.studentmanagement.service.CourseService;
 
 import jakarta.validation.Valid;
@@ -31,11 +37,44 @@ public class CourseController {
     }
 
     @GetMapping
-    public List<CourseResponseDTO> getAllCourses() {
-        return courseService.getAllCourses()
-                .stream()
-                .map(CourseMapper::toResponseDTO)
-                .toList();
+    public PageResponseDTO<CourseResponseDTO> getAllCourses(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "id") String sortBy,
+            @RequestParam(defaultValue = "asc") String direction,
+            @RequestParam(required = false) Integer credits) {
+        if (credits != null && credits <= 0) {
+            throw new InvalidPaginationException("Credits must be positive");
+        }
+
+        SortDirection sortDirection;
+
+        try {
+            sortDirection = SortDirection.valueOf(
+                    direction.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            throw new InvalidPaginationException("Direction must be asc or desc");
+        }
+
+        PageRequest request;
+
+        try {
+            request = new PageRequest(page, size, sortBy, sortDirection);
+        } catch (IllegalArgumentException exception) {
+            throw new InvalidPaginationException(exception.getMessage());
+        }
+
+        PageResult<Course> courses = courseService.getCoursesPage(request, credits);
+
+        return new PageResponseDTO<>(
+                courses.content()
+                        .stream()
+                        .map(CourseMapper::toResponseDTO)
+                        .toList(),
+                courses.page(),
+                courses.size(),
+                courses.totalElements(),
+                courses.totalPages());
     }
 
     @GetMapping("/{id}")

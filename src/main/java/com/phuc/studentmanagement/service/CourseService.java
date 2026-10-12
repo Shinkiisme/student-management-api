@@ -11,6 +11,8 @@ import org.springframework.stereotype.Service;
 import com.phuc.studentmanagement.exception.CourseCodeAlreadyExistsException;
 import com.phuc.studentmanagement.exception.ResourceInUseException;
 import com.phuc.studentmanagement.model.Course;
+import com.phuc.studentmanagement.pagination.PageRequest;
+import com.phuc.studentmanagement.pagination.PageResult;
 import com.phuc.studentmanagement.repository.CourseRepository;
 
 @Service
@@ -23,6 +25,10 @@ public class CourseService {
 
     public List<Course> getAllCourses() {
         return courseRepository.findAll();
+    }
+
+    public PageResult<Course> getCoursesPage(PageRequest request, Integer credits) {
+        return courseRepository.findPage(request, credits);
     }
 
     public Optional<Course> getCourseById(int id) {

@@ -22,8 +22,12 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 
 import com.phuc.studentmanagement.exception.CourseCodeAlreadyExistsException;
+import com.phuc.studentmanagement.exception.InvalidPaginationException;
 import com.phuc.studentmanagement.exception.ResourceInUseException;
 import com.phuc.studentmanagement.model.Course;
+import com.phuc.studentmanagement.pagination.PageRequest;
+import com.phuc.studentmanagement.pagination.PageResult;
+import com.phuc.studentmanagement.pagination.SortDirection;
 import com.phuc.studentmanagement.repository.CourseRepository;
 
 @ExtendWith(MockitoExtension.class)
@@ -48,6 +52,115 @@ class CourseServiceTest {
 
         assertEquals(expectedCourses, actualCourses);
         verify(courseRepository).findAll();
+    }
+
+    @Test
+    void getCoursesPage_shouldReturnPage_whenCreditsIsNull() {
+        Course course1 = new Course(1, "CS101", "Java Programming", 4);
+        Course course2 = new Course(2, "CS102", "Data Structures", 3);
+
+        PageRequest request = new PageRequest(
+                0, 2, "id", SortDirection.ASC);
+
+        PageResult<Course> expectedPage = new PageResult<>(
+                List.of(course1, course2),
+                0,
+                2,
+                5);
+
+        when(courseRepository.findPage(request, null))
+                .thenReturn(expectedPage);
+
+        PageResult<Course> result = courseService.getCoursesPage(request, null);
+
+        assertSame(expectedPage, result);
+        assertEquals(2, result.content().size());
+        assertEquals(0, result.page());
+        assertEquals(2, result.size());
+        assertEquals(5, result.totalElements());
+        assertEquals(3, result.totalPages());
+
+        verify(courseRepository).findPage(request, null);
+    }
+
+    @Test
+    void getCoursesPage_shouldReturnFilteredPage_whenCreditsIsProvided() {
+        Course course1 = new Course(1, "CS101", "Java Programming", 4);
+        Course course2 = new Course(3, "CS103", "Databases", 4);
+
+        PageRequest request = new PageRequest(
+                0, 2, "credits", SortDirection.DESC);
+
+        PageResult<Course> expectedPage = new PageResult<>(
+                List.of(course1, course2),
+                0,
+                2,
+                2);
+
+        when(courseRepository.findPage(request, 4))
+                .thenReturn(expectedPage);
+
+        PageResult<Course> result = courseService.getCoursesPage(request, 4);
+
+        assertSame(expectedPage, result);
+        assertEquals(2, result.content().size());
+        assertTrue(result.content().stream()
+                .allMatch(course -> course.getCredits() == 4));
+        assertEquals(0, result.page());
+        assertEquals(2, result.size());
+        assertEquals(2, result.totalElements());
+        assertEquals(1, result.totalPages());
+
+        verify(courseRepository).findPage(request, 4);
+    }
+
+    @Test
+    void getCoursesPage_shouldReturnEmptyPage_whenNoCoursesExist() {
+        PageRequest request = new PageRequest(
+                0, 10, "id", SortDirection.ASC);
+
+        PageResult<Course> expectedPage = new PageResult<>(
+                List.of(),
+                0,
+                10,
+                0);
+
+        when(courseRepository.findPage(request, null))
+                .thenReturn(expectedPage);
+
+        PageResult<Course> result = courseService.getCoursesPage(request, null);
+
+        assertSame(expectedPage, result);
+        assertTrue(result.content().isEmpty());
+        assertEquals(0, result.page());
+        assertEquals(10, result.size());
+        assertEquals(0, result.totalElements());
+        assertEquals(0, result.totalPages());
+
+        verify(courseRepository).findPage(request, null);
+    }
+
+    @Test
+    void getCoursesPage_shouldPropagateInvalidPaginationException_whenSortFieldIsInvalid() {
+        PageRequest request = new PageRequest(
+                0, 10, "invalid", SortDirection.ASC);
+
+        InvalidPaginationException expectedException = new InvalidPaginationException(
+                "Invalid sort field: invalid");
+
+        when(courseRepository.findPage(request, null))
+                .thenThrow(expectedException);
+
+        InvalidPaginationException actualException = assertThrows(
+                InvalidPaginationException.class,
+                () -> courseService.getCoursesPage(request, null));
+
+        assertSame(expectedException, actualException);
+        assertEquals(
+                "Invalid sort field: invalid",
+                actualException.getMessage());
+
+        verify(courseRepository).findPage(request, null);
     }
 
     @Test
