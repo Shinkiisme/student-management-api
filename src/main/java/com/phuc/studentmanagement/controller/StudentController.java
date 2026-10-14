@@ -3,6 +3,7 @@ package com.phuc.studentmanagement.controller;
 import java.util.Locale;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -79,7 +80,8 @@ public class StudentController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<StudentResponseDTO> getStudentById(@PathVariable int id) {
+    @PreAuthorize("hasRole('ADMIN') or @ownershipAuthorizationService.isOwner(authentication.name, #id)")
+    public ResponseEntity<StudentResponseDTO> getStudentById(@PathVariable("id") int id) {
         return studentService.getStudentById(id)
                 .map(StudentMapper::toResponseDTO)
                 .map(ResponseEntity::ok)

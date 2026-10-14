@@ -2,6 +2,7 @@ package com.phuc.studentmanagement.controller;
 
 import java.util.List;
 
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,7 +22,8 @@ public class StudentEnrollmentController {
     }
 
     @GetMapping
-    public List<EnrollmentResponseDTO> getEnrollmentsByStudentId(@PathVariable int studentId) {
+    @PreAuthorize("hasRole('ADMIN') or @ownershipAuthorizationService.isOwner(authentication.name, #studentId)")
+    public List<EnrollmentResponseDTO> getEnrollmentsByStudentId(@PathVariable("studentId") int studentId) {
         return enrollmentService.getEnrollmentsByStudentId(studentId)
                 .stream()
                 .map(EnrollmentMapper::toResponseDTO)

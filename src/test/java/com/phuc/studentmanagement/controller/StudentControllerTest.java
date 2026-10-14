@@ -19,9 +19,11 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -35,11 +37,11 @@ import com.phuc.studentmanagement.pagination.SortDirection;
 import com.phuc.studentmanagement.service.StudentService;
 
 @WebMvcTest(StudentController.class)
+@AutoConfigureMockMvc(addFilters = false)
+@WithMockUser(roles = "ADMIN")
 class StudentControllerTest {
-
         @Autowired
         private MockMvc mockMvc;
-
         @MockitoBean
         private StudentService studentService;
 
@@ -50,9 +52,7 @@ class StudentControllerTest {
                                 new Student(2, "24120002", "Huy", 19));
                 PageRequest request = new PageRequest(0, 10, "id", SortDirection.ASC);
                 PageResult<Student> result = new PageResult<>(students, 0, 10, 2);
-
                 when(studentService.getStudentsPage(request, null)).thenReturn(result);
-
                 mockMvc.perform(get("/students"))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.content.length()").value(2))
@@ -68,7 +68,6 @@ class StudentControllerTest {
                                 .andExpect(jsonPath("$.size").value(10))
                                 .andExpect(jsonPath("$.totalElements").value(2))
                                 .andExpect(jsonPath("$.totalPages").value(1));
-
                 verify(studentService).getStudentsPage(request, null);
         }
 
@@ -76,9 +75,7 @@ class StudentControllerTest {
         void getAllStudents_shouldReturnEmptyPage_whenNoStudentsExist() throws Exception {
                 PageRequest request = new PageRequest(0, 10, "id", SortDirection.ASC);
                 PageResult<Student> result = new PageResult<>(List.of(), 0, 10, 0);
-
                 when(studentService.getStudentsPage(request, null)).thenReturn(result);
-
                 mockMvc.perform(get("/students"))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.content.length()").value(0))
@@ -86,7 +83,6 @@ class StudentControllerTest {
                                 .andExpect(jsonPath("$.size").value(10))
                                 .andExpect(jsonPath("$.totalElements").value(0))
                                 .andExpect(jsonPath("$.totalPages").value(0));
-
                 verify(studentService).getStudentsPage(request, null);
         }
 
@@ -97,9 +93,7 @@ class StudentControllerTest {
                                 new Student(3, "24120003", "Nam", 20));
                 PageRequest request = new PageRequest(0, 10, "id", SortDirection.ASC);
                 PageResult<Student> result = new PageResult<>(students, 0, 10, 2);
-
                 when(studentService.getStudentsPage(request, 20)).thenReturn(result);
-
                 mockMvc.perform(get("/students").param("age", "20"))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.content.length()").value(2))
@@ -109,7 +103,6 @@ class StudentControllerTest {
                                 .andExpect(jsonPath("$.content[1].age").value(20))
                                 .andExpect(jsonPath("$.totalElements").value(2))
                                 .andExpect(jsonPath("$.totalPages").value(1));
-
                 verify(studentService).getStudentsPage(request, 20);
         }
 
@@ -120,9 +113,7 @@ class StudentControllerTest {
                                 new Student(3, "24120003", "Nam", 20),
                                 new Student(4, "24120004", "An", 21));
                 PageResult<Student> result = new PageResult<>(students, 1, 2, 5);
-
                 when(studentService.getStudentsPage(request, null)).thenReturn(result);
-
                 mockMvc.perform(get("/students")
                                 .param("page", "1")
                                 .param("size", "2"))
@@ -134,7 +125,6 @@ class StudentControllerTest {
                                 .andExpect(jsonPath("$.size").value(2))
                                 .andExpect(jsonPath("$.totalElements").value(5))
                                 .andExpect(jsonPath("$.totalPages").value(3));
-
                 verify(studentService).getStudentsPage(request, null);
         }
 
@@ -143,16 +133,13 @@ class StudentControllerTest {
                 PageRequest request = new PageRequest(0, 10, "name", SortDirection.DESC);
                 PageResult<Student> result = new PageResult<>(
                                 List.of(new Student(1, "24120001", "Phuc", 20)), 0, 10, 1);
-
                 when(studentService.getStudentsPage(request, null)).thenReturn(result);
-
                 mockMvc.perform(get("/students")
                                 .param("sortBy", "name")
                                 .param("direction", "desc"))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.content[0].name").value("Phuc"))
                                 .andExpect(jsonPath("$.totalElements").value(1));
-
                 verify(studentService).getStudentsPage(request, null);
         }
 
@@ -160,13 +147,10 @@ class StudentControllerTest {
         void getAllStudents_shouldAcceptUppercaseSortDirection() throws Exception {
                 PageRequest request = new PageRequest(0, 10, "id", SortDirection.DESC);
                 PageResult<Student> result = new PageResult<>(List.of(), 0, 10, 0);
-
                 when(studentService.getStudentsPage(request, null)).thenReturn(result);
-
                 mockMvc.perform(get("/students").param("direction", "DESC"))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.content.length()").value(0));
-
                 verify(studentService).getStudentsPage(request, null);
         }
 
@@ -175,9 +159,7 @@ class StudentControllerTest {
                 PageRequest request = new PageRequest(1, 1, "age", SortDirection.ASC);
                 PageResult<Student> result = new PageResult<>(
                                 List.of(new Student(3, "24120003", "Nam", 20)), 1, 1, 3);
-
                 when(studentService.getStudentsPage(request, 20)).thenReturn(result);
-
                 mockMvc.perform(get("/students")
                                 .param("page", "1")
                                 .param("size", "1")
@@ -190,7 +172,6 @@ class StudentControllerTest {
                                 .andExpect(jsonPath("$.size").value(1))
                                 .andExpect(jsonPath("$.totalElements").value(3))
                                 .andExpect(jsonPath("$.totalPages").value(3));
-
                 verify(studentService).getStudentsPage(request, 20);
         }
 
@@ -198,13 +179,10 @@ class StudentControllerTest {
         void getAllStudents_shouldAcceptMaximumPageSize() throws Exception {
                 PageRequest request = new PageRequest(0, 100, "id", SortDirection.ASC);
                 PageResult<Student> result = new PageResult<>(List.of(), 0, 100, 0);
-
                 when(studentService.getStudentsPage(request, null)).thenReturn(result);
-
                 mockMvc.perform(get("/students").param("size", "100"))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.size").value(100));
-
                 verify(studentService).getStudentsPage(request, null);
         }
 
@@ -212,9 +190,7 @@ class StudentControllerTest {
         void getAllStudents_shouldReturnEmptyContent_whenPageIsBeyondLastPage() throws Exception {
                 PageRequest request = new PageRequest(9, 2, "id", SortDirection.ASC);
                 PageResult<Student> result = new PageResult<>(List.of(), 9, 2, 5);
-
                 when(studentService.getStudentsPage(request, null)).thenReturn(result);
-
                 mockMvc.perform(get("/students")
                                 .param("page", "9")
                                 .param("size", "2"))
@@ -223,7 +199,6 @@ class StudentControllerTest {
                                 .andExpect(jsonPath("$.page").value(9))
                                 .andExpect(jsonPath("$.totalElements").value(5))
                                 .andExpect(jsonPath("$.totalPages").value(3));
-
                 verify(studentService).getStudentsPage(request, null);
         }
 
@@ -234,7 +209,6 @@ class StudentControllerTest {
                                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                                 .andExpect(jsonPath("$.status").value(400))
                                 .andExpect(jsonPath("$.detail").value("Page must not be negative"));
-
                 verifyNoInteractions(studentService);
         }
 
@@ -244,7 +218,6 @@ class StudentControllerTest {
                                 .andExpect(status().isBadRequest())
                                 .andExpect(jsonPath("$.status").value(400))
                                 .andExpect(jsonPath("$.detail").value("Size must be between 1 and 100"));
-
                 verifyNoInteractions(studentService);
         }
 
@@ -254,7 +227,6 @@ class StudentControllerTest {
                                 .andExpect(status().isBadRequest())
                                 .andExpect(jsonPath("$.status").value(400))
                                 .andExpect(jsonPath("$.detail").value("Size must be between 1 and 100"));
-
                 verifyNoInteractions(studentService);
         }
 
@@ -264,22 +236,18 @@ class StudentControllerTest {
                                 .andExpect(status().isBadRequest())
                                 .andExpect(jsonPath("$.status").value(400))
                                 .andExpect(jsonPath("$.detail").value("Sort by is required"));
-
                 verifyNoInteractions(studentService);
         }
 
         @Test
         void getAllStudents_shouldReturnBadRequest_whenSortFieldIsNotAllowed() throws Exception {
                 PageRequest request = new PageRequest(0, 10, "password", SortDirection.ASC);
-
                 when(studentService.getStudentsPage(request, null))
                                 .thenThrow(new InvalidPaginationException("Invalid sort field: password"));
-
                 mockMvc.perform(get("/students").param("sortBy", "password"))
                                 .andExpect(status().isBadRequest())
                                 .andExpect(jsonPath("$.status").value(400))
                                 .andExpect(jsonPath("$.detail").value("Invalid sort field: password"));
-
                 verify(studentService).getStudentsPage(request, null);
         }
 
@@ -289,7 +257,6 @@ class StudentControllerTest {
                                 .andExpect(status().isBadRequest())
                                 .andExpect(jsonPath("$.status").value(400))
                                 .andExpect(jsonPath("$.detail").value("Direction must be asc or desc"));
-
                 verifyNoInteractions(studentService);
         }
 
@@ -299,7 +266,6 @@ class StudentControllerTest {
                                 .andExpect(status().isBadRequest())
                                 .andExpect(jsonPath("$.status").value(400))
                                 .andExpect(jsonPath("$.detail").value("Age cannot be negative"));
-
                 verifyNoInteractions(studentService);
         }
 
@@ -307,7 +273,6 @@ class StudentControllerTest {
         void getAllStudents_shouldReturnBadRequest_whenPageIsNotNumeric() throws Exception {
                 mockMvc.perform(get("/students").param("page", "abc"))
                                 .andExpect(status().isBadRequest());
-
                 verifyNoInteractions(studentService);
         }
 
@@ -315,7 +280,6 @@ class StudentControllerTest {
         void getAllStudents_shouldReturnBadRequest_whenAgeIsNotNumeric() throws Exception {
                 mockMvc.perform(get("/students").param("age", "abc"))
                                 .andExpect(status().isBadRequest());
-
                 verifyNoInteractions(studentService);
         }
 
@@ -356,9 +320,9 @@ class StudentControllerTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
                                                 {
-                                                  "studentCode": "24120004",
-                                                  "name": "Nam",
-                                                  "age": 22
+                                                 "studentCode": "24120004",
+                                                 "name": "Nam",
+                                                 "age": 22
                                                 }
                                                 """))
                                 .andExpect(status().isCreated())
@@ -377,9 +341,9 @@ class StudentControllerTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
                                                 {
-                                                  "studentCode": "",
-                                                  "name": "",
-                                                  "age": -5
+                                                 "studentCode": "",
+                                                 "name": "",
+                                                 "age": -5
                                                 }
                                                 """))
                                 .andExpect(status().isBadRequest())
@@ -403,8 +367,8 @@ class StudentControllerTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
                                                 {
-                                                  "studentCode": "24120001",
-                                                  "name": "Phuc"
+                                                 "studentCode": "24120001",
+                                                 "name": "Phuc"
                                                 }
                                                 """))
                                 .andExpect(status().isBadRequest())
@@ -420,8 +384,8 @@ class StudentControllerTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
                                                 {
-                                                  "name": "Phuc",
-                                                  "age": 20
+                                                 "name": "Phuc",
+                                                 "age": 20
                                                 }
                                                 """))
                                 .andExpect(status().isBadRequest())
@@ -438,9 +402,9 @@ class StudentControllerTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
                                                 {
-                                                  "studentCode": "%s",
-                                                  "name": "Phuc",
-                                                  "age": 20
+                                                 "studentCode": "%s",
+                                                 "name": "Phuc",
+                                                 "age": 20
                                                 }
                                                 """.formatted(studentCode)))
                                 .andExpect(status().isBadRequest())
@@ -460,9 +424,9 @@ class StudentControllerTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
                                                 {
-                                                  "studentCode": "24120001",
-                                                  "name": "Phuc",
-                                                  "age": 20
+                                                 "studentCode": "24120001",
+                                                 "name": "Phuc",
+                                                 "age": 20
                                                 }
                                                 """))
                                 .andExpect(status().isConflict())
@@ -483,9 +447,9 @@ class StudentControllerTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
                                                 {
-                                                  "studentCode": "24120002",
-                                                  "name": "Huy Nguyen",
-                                                  "age": 22
+                                                 "studentCode": "24120002",
+                                                 "name": "Huy Nguyen",
+                                                 "age": 22
                                                 }
                                                 """))
                                 .andExpect(status().isOk())
@@ -508,9 +472,9 @@ class StudentControllerTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
                                                 {
-                                                  "studentCode": "24120003",
-                                                  "name": "Nam",
-                                                  "age": 22
+                                                 "studentCode": "24120003",
+                                                 "name": "Nam",
+                                                 "age": 22
                                                 }
                                                 """))
                                 .andExpect(status().isNotFound())
@@ -527,9 +491,9 @@ class StudentControllerTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
                                                 {
-                                                  "studentCode": "",
-                                                  "name": "",
-                                                  "age": -1
+                                                 "studentCode": "",
+                                                 "name": "",
+                                                 "age": -1
                                                 }
                                                 """))
                                 .andExpect(status().isBadRequest())
@@ -555,9 +519,9 @@ class StudentControllerTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("""
                                                 {
-                                                  "studentCode": "24120001",
-                                                  "name": "Huy",
-                                                  "age": 20
+                                                 "studentCode": "24120001",
+                                                 "name": "Huy",
+                                                 "age": 20
                                                 }
                                                 """))
                                 .andExpect(status().isConflict())
@@ -604,4 +568,5 @@ class StudentControllerTest {
                                                 .value("Student with id 1 cannot be deleted because it is in use"));
                 verify(studentService).deleteStudent(1);
         }
+
 }
