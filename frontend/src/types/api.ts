@@ -40,3 +40,12 @@ export interface ProblemDetail {
   status?: number;
   errors?: Record<string, string>;
 }
+export type EnrollmentSortField = "id" | "studentId" | "courseId";
+export interface EnrollmentListQuery extends Pick<
+  ListQuery,
+  "page" | "size" | "direction"
+> {
+  sortBy: EnrollmentSortField;
+  studentId?: number;
+}
+export type EnrollmentPageQuery = Omit<EnrollmentListQuery, "studentId">;

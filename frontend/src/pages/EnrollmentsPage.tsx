@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
 import { AlertCircle, Link2, Plus, RefreshCw } from "lucide-react";
 import { ApiError } from "../api/http";
@@ -6,18 +6,38 @@ import { enrollmentsApi } from "../api/resources";
 import { useAsync } from "../hooks/useAsync";
 import { useDirectory } from "../hooks/useDirectory";
 import { useNotify } from "../hooks/notificationContext";
-import type { Enrollment } from "../types/api";
+import type {
+  Enrollment,
+  EnrollmentPageQuery,
+  EnrollmentSortField,
+} from "../types/api";
 import { integerValue } from "../utils/validation";
 import { DirectorySelect } from "../components/DirectorySelect";
 import { EnrollmentTable } from "../components/EnrollmentTable";
 import { EnrollmentForm } from "../components/EnrollmentForm";
 import { EnrollmentDetails } from "../components/EnrollmentDetails";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { Pagination } from "../components/Pagination";
 import { EmptyState, ErrorState, Loading, PageHeading } from "../components/ui";
 
 export function EnrollmentsPage() {
   const [params, setParams] = useSearchParams();
-  const studentFilter = params.get("studentId") ?? "";
+  const requestedStudent = params.get("studentId") ?? "";
+  const studentId = requestedStudent
+    ? integerValue(requestedStudent, 1)
+    : undefined;
+  const studentFilter =
+    studentId === undefined
+      ? ""
+      : studentId === null
+        ? requestedStudent
+        : String(studentId);
+  const [query, setQuery] = useState<EnrollmentPageQuery>({
+    page: 0,
+    size: 10,
+    sortBy: "id",
+    direction: "asc",
+  });
   const [adding, setAdding] = useState(false);
   const [deleting, setDeleting] = useState<Enrollment | null>(null);
   const [viewing, setViewing] = useState<Enrollment | null>(null);
@@ -25,19 +45,52 @@ export function EnrollmentsPage() {
   const notify = useNotify();
   const load = useCallback(
     (signal: AbortSignal) => {
-      if (!studentFilter) return enrollmentsApi.list(signal);
-      const id = integerValue(studentFilter, 1);
-      if (id === null)
+      if (studentId === null)
         return Promise.reject(
           new ApiError(400, {
             detail: "The student filter must be a positive integer.",
           }),
         );
-      return enrollmentsApi.byStudent(id, signal);
+      return enrollmentsApi.list({ ...query, studentId }, signal);
     },
-    [studentFilter],
+    [studentId, query],
   );
   const { data, error, pending, reload } = useAsync(load);
+  const recoveringPage =
+    data !== null && data.page > 0 && data.page >= data.totalPages;
+  useEffect(() => {
+    setQuery((previous) =>
+      previous.page === 0 ? previous : { ...previous, page: 0 },
+    );
+  }, [studentFilter]);
+  useEffect(() => {
+    if (data && data.page > 0 && data.page >= data.totalPages) {
+      setQuery((previous) => ({
+        ...previous,
+        page: Math.max(0, data.totalPages - 1),
+      }));
+    }
+  }, [data]);
+  function changeFilter(value: string) {
+    setQuery((previous) => ({ ...previous, page: 0 }));
+    setParams((previous) => {
+      const next = new URLSearchParams(previous);
+      if (value) next.set("studentId", value);
+      else next.delete("studentId");
+      return next;
+    });
+  }
+  function sort(field: EnrollmentSortField) {
+    setQuery((previous) => ({
+      ...previous,
+      page: 0,
+      sortBy: field,
+      direction:
+        previous.sortBy === field && previous.direction === "asc"
+          ? "desc"
+          : "asc",
+    }));
+  }
   const directoryPending =
     directory.students.pending || directory.courses.pending;
   const directoryReady =
@@ -47,7 +100,7 @@ export function EnrollmentsPage() {
       id: student.id,
       label: `${student.name} · ${student.studentCode}`,
     })) ?? [];
-  // Preserve links to an unknown/deleted student so the backend's 404 remains visible.
+  // Preserve a positive ID absent from the directory so its server-side filter stays visible.
   if (
     studentFilter &&
     !studentOptions.some((option) => String(option.id) === studentFilter)
@@ -104,7 +157,7 @@ export function EnrollmentsPage() {
             </h2>
             {data && (
               <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
-                {data.length}
+                {data.totalElements.toLocaleString()}
               </span>
             )}
           </div>
@@ -126,7 +179,7 @@ export function EnrollmentsPage() {
             <DirectorySelect
               label="Filter by student"
               value={studentFilter}
-              onChange={(value) => setParams(value ? { studentId: value } : {})}
+              onChange={changeFilter}
               options={studentOptions}
               placeholder="All students"
               disabled={directory.students.pending}
@@ -135,54 +188,61 @@ export function EnrollmentsPage() {
           {studentFilter && (
             <button
               className="mt-3 text-xs font-medium text-blue-600 hover:underline"
-              onClick={() => setParams({})}
+              onClick={() => changeFilter("")}
             >
               Clear student filter
             </button>
           )}
         </div>
-        {pending ? (
+        {pending || recoveringPage ? (
           <Loading label="Loading enrollments…" />
         ) : error ? (
           <div className="p-5">
             <ErrorState error={error} retry={reload} />
           </div>
         ) : (
-          data &&
-          (data.length ? (
+          data && (
             <>
-              <EnrollmentTable
-                enrollments={data}
-                students={directory.studentMap}
-                courses={directory.courseMap}
-                onCancel={setDeleting}
-                onView={setViewing}
+              {data.content.length ? (
+                <EnrollmentTable
+                  enrollments={data.content}
+                  students={directory.studentMap}
+                  courses={directory.courseMap}
+                  onCancel={setDeleting}
+                  onView={setViewing}
+                  sorting={{ ...query, onSort: sort }}
+                />
+              ) : (
+                <EmptyState
+                  title={
+                    studentFilter
+                      ? "No enrollments for this student"
+                      : "No enrollments yet"
+                  }
+                  description="Register a student for a course to start building their learning journey."
+                  action={
+                    <button
+                      className="button-primary"
+                      disabled={!directoryReady}
+                      onClick={() => setAdding(true)}
+                    >
+                      <Plus className="size-4" />
+                      Register enrollment
+                    </button>
+                  }
+                />
+              )}
+              <Pagination
+                {...data}
+                onPage={(page) =>
+                  setQuery((previous) => ({ ...previous, page }))
+                }
+                onSize={(size) =>
+                  setQuery((previous) => ({ ...previous, page: 0, size }))
+                }
               />
-              <div className="border-t border-slate-100 px-5 py-4 text-xs text-slate-500">
-                {data.length.toLocaleString()} enrollment
-                {data.length === 1 ? "" : "s"} · Showing all returned records
-              </div>
             </>
-          ) : (
-            <EmptyState
-              title={
-                studentFilter
-                  ? "No enrollments for this student"
-                  : "No enrollments yet"
-              }
-              description="Register a student for a course to start building their learning journey."
-              action={
-                <button
-                  className="button-primary"
-                  disabled={!directoryReady}
-                  onClick={() => setAdding(true)}
-                >
-                  <Plus className="size-4" />
-                  Register enrollment
-                </button>
-              }
-            />
-          ))
+          )
         )}
       </section>
       {adding && directory.students.data && directory.courses.data && (

@@ -36,7 +36,7 @@ beforeEach(() => {
         return Promise.resolve(Response.json(page([course])));
       if (url.startsWith("/api/students?"))
         return Promise.resolve(Response.json(page([])));
-      if (url === "/api/enrollments")
+      if (url.startsWith("/api/enrollments?"))
         return Promise.resolve(Response.json(page([])));
       return Promise.reject(new Error("Unexpected test API request"));
     }),
@@ -84,7 +84,7 @@ describe("authentication routing and presentation", () => {
     expect(container.querySelector("nav")?.textContent).toContain(
       "Enrollments",
     );
-    expect(container.textContent).toContain("paginated enrollments");
+    expect(container.textContent).toContain("0 Enrollments");
   });
 
   it.each(["/", "/students", "/students/71", "/enrollments"])(

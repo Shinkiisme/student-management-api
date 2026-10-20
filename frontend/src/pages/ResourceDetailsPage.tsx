@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import {
   ArrowLeft,
@@ -14,26 +14,59 @@ import { useAsync } from "../hooks/useAsync";
 import { useDirectory } from "../hooks/useDirectory";
 import { useNotify } from "../hooks/notificationContext";
 import { useAuth } from "../hooks/authContext";
+import type { EnrollmentPageQuery, EnrollmentSortField } from "../types/api";
 import type { ResourceConfig } from "../utils/resourceConfig";
 import { integerValue } from "../utils/validation";
 import { ResourceForm } from "../components/ResourceForm";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { EnrollmentTable } from "../components/EnrollmentTable";
+import { Pagination } from "../components/Pagination";
 import { EmptyState, ErrorState, Loading, PageHeading } from "../components/ui";
 
 function StudentEnrollments({ studentId }: { studentId: number }) {
+  const [query, setQuery] = useState<EnrollmentPageQuery>({
+    page: 0,
+    size: 10,
+    sortBy: "id",
+    direction: "asc",
+  });
   const load = useCallback(
-    (signal: AbortSignal) => enrollmentsApi.byStudent(studentId, signal),
-    [studentId],
+    (signal: AbortSignal) => enrollmentsApi.byStudent(studentId, query, signal),
+    [studentId, query],
   );
   const { data, error, pending, reload } = useAsync(load);
   const directory = useDirectory();
+  const recoveringPage =
+    data !== null && data.page > 0 && data.page >= data.totalPages;
+  useEffect(() => {
+    if (data && data.page > 0 && data.page >= data.totalPages) {
+      setQuery((previous) => ({
+        ...previous,
+        page: Math.max(0, data.totalPages - 1),
+      }));
+    }
+  }, [data]);
+  function sort(field: EnrollmentSortField) {
+    setQuery((previous) => ({
+      ...previous,
+      page: 0,
+      sortBy: field,
+      direction:
+        previous.sortBy === field && previous.direction === "asc"
+          ? "desc"
+          : "asc",
+    }));
+  }
   return (
     <section className="panel mt-6">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-5">
         <h2 className="text-sm font-semibold">
           Course enrollments{" "}
-          {data && <span className="ml-2 text-slate-400">({data.length})</span>}
+          {data && (
+            <span className="ml-2 text-slate-400">
+              ({data.totalElements.toLocaleString()})
+            </span>
+          )}
         </h2>
         <Link
           className="inline-flex items-center gap-2 text-xs font-medium text-blue-600"
@@ -51,26 +84,37 @@ function StudentEnrollments({ studentId }: { studentId: number }) {
           />
         </div>
       )}
-      {pending ? (
+      {pending || recoveringPage ? (
         <Loading />
       ) : error ? (
         <div className="p-5">
           <ErrorState error={error} retry={reload} />
         </div>
       ) : (
-        data &&
-        (data.length ? (
-          <EnrollmentTable
-            enrollments={data}
-            students={directory.studentMap}
-            courses={directory.courseMap}
-          />
-        ) : (
-          <EmptyState
-            title="No courses registered"
-            description="This student has no enrollments. Register them for a course from the enrollments workspace."
-          />
-        ))
+        data && (
+          <>
+            {data.content.length ? (
+              <EnrollmentTable
+                enrollments={data.content}
+                students={directory.studentMap}
+                courses={directory.courseMap}
+                sorting={{ ...query, onSort: sort }}
+              />
+            ) : (
+              <EmptyState
+                title="No courses registered"
+                description="This student has no enrollments. Register them for a course from the enrollments workspace."
+              />
+            )}
+            <Pagination
+              {...data}
+              onPage={(page) => setQuery((previous) => ({ ...previous, page }))}
+              onSize={(size) =>
+                setQuery((previous) => ({ ...previous, page: 0, size }))
+              }
+            />
+          </>
+        )
       )}
     </section>
   );
@@ -183,7 +227,7 @@ export function ResourceDetailsPage<T extends { id: number; name: string }, P>({
               </dl>
             </section>
             {config.kind === "students" && (
-              <StudentEnrollments studentId={data.id} />
+              <StudentEnrollments key={data.id} studentId={data.id} />
             )}
           </>
         )

@@ -17,7 +17,11 @@ import { initials } from "../utils/validation";
 const query = { page: 0, size: 5, sortBy: "id", direction: "asc" as const };
 const loadStudents = (signal: AbortSignal) => studentsApi.list(query, signal);
 const loadCourses = (signal: AbortSignal) => coursesApi.list(query, signal);
-const loadEnrollments = (signal: AbortSignal) => enrollmentsApi.list(signal);
+const loadEnrollments = (signal: AbortSignal) =>
+  enrollmentsApi.list(
+    { page: 0, size: 1, sortBy: "id", direction: "asc" },
+    signal,
+  );
 
 function StatCard({
   label,
@@ -87,18 +91,8 @@ export function DashboardPage() {
   const courses = useAsync(loadCourses);
   const enrollments = useAsync(loadEnrollments);
   const pending = students.pending || courses.pending || enrollments.pending;
-  const courseRows =
-    courses.data?.content.map((course) => ({
-      ...course,
-      enrollmentCount:
-        enrollments.data?.filter(
-          (enrollment) => enrollment.courseId === course.id,
-        ).length ?? null,
-    })) ?? [];
-  const maximum = Math.max(
-    1,
-    ...courseRows.map((course) => course.enrollmentCount ?? 0),
-  );
+  const courseRows = courses.data?.content ?? [];
+  const maximum = Math.max(1, ...courseRows.map((course) => course.credits));
   return (
     <>
       <PageHeading
@@ -164,7 +158,7 @@ export function DashboardPage() {
         />
         <StatCard
           label="Enrollments"
-          value={enrollments.data?.length}
+          value={enrollments.data?.totalElements}
           description="Student–course registrations"
           icon={Link2}
           tone="bg-emerald-50 text-emerald-600"
@@ -243,7 +237,7 @@ export function DashboardPage() {
                 Course snapshot
               </h2>
               <p className="mt-1 text-xs text-slate-400">
-                Enrollment counts for the first five courses
+                Credit requirements for the first five courses by ID
               </p>
             </div>
             <Link
@@ -253,17 +247,11 @@ export function DashboardPage() {
               View all
             </Link>
           </div>
-          {courses.pending || enrollments.pending ? (
+          {courses.pending ? (
             <Loading />
-          ) : courses.error || enrollments.error ? (
+          ) : courses.error ? (
             <div className="p-5">
-              <ErrorState
-                error={courses.error || enrollments.error}
-                retry={() => {
-                  courses.reload();
-                  enrollments.reload();
-                }}
-              />
+              <ErrorState error={courses.error} retry={courses.reload} />
             </div>
           ) : courseRows.length ? (
             <div className="space-y-6 p-5">
@@ -278,18 +266,18 @@ export function DashboardPage() {
                       {course.name}
                     </Link>
                     <span className="shrink-0 text-xs font-semibold text-slate-600">
-                      {course.enrollmentCount}
+                      {course.credits} credits
                     </span>
                   </div>
                   <div
                     role="img"
                     className="h-1.5 overflow-hidden rounded-full bg-slate-100"
-                    aria-label={`${course.name}: ${course.enrollmentCount} enrollments`}
+                    aria-label={`${course.name}: ${course.credits} credits`}
                   >
                     <div
                       className="h-full rounded-full bg-blue-500"
                       style={{
-                        width: `${((course.enrollmentCount ?? 0) / maximum) * 100}%`,
+                        width: `${(course.credits / maximum) * 100}%`,
                       }}
                     />
                   </div>
@@ -299,7 +287,7 @@ export function DashboardPage() {
           ) : (
             <EmptyState
               title="No courses available"
-              description="Build your course catalog to see enrollment counts here."
+              description="Build your course catalog to see credit requirements here."
             />
           )}
         </section>

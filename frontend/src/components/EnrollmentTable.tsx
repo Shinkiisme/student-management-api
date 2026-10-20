@@ -1,7 +1,14 @@
 import { Link } from "react-router";
 import { BookOpen, Eye, Unlink } from "lucide-react";
-import type { Course, Enrollment, Student } from "../types/api";
+import type {
+  Course,
+  Direction,
+  Enrollment,
+  EnrollmentSortField,
+  Student,
+} from "../types/api";
 import { initials } from "../utils/validation";
+import { SortHeading } from "./ui";
 
 export function EnrollmentTable({
   enrollments,
@@ -9,12 +16,18 @@ export function EnrollmentTable({
   courses,
   onCancel,
   onView,
+  sorting,
 }: {
   enrollments: Enrollment[];
   students: Map<number, Student>;
   courses: Map<number, Course>;
   onCancel?: (enrollment: Enrollment) => void;
   onView?: (enrollment: Enrollment) => void;
+  sorting?: {
+    sortBy: EnrollmentSortField;
+    direction: Direction;
+    onSort: (field: EnrollmentSortField) => void;
+  };
 }) {
   return (
     <div className="table-scroll">
@@ -22,9 +35,28 @@ export function EnrollmentTable({
         <caption className="sr-only">Student course enrollments</caption>
         <thead>
           <tr>
-            <th scope="col">Enrollment ID</th>
-            <th scope="col">Student</th>
-            <th scope="col">Course</th>
+            {(
+              [
+                { field: "id", label: "Enrollment ID" },
+                { field: "studentId", label: "Student ID" },
+                { field: "courseId", label: "Course ID" },
+              ] as const
+            ).map(({ field, label }) =>
+              sorting ? (
+                <SortHeading
+                  key={field}
+                  label={label}
+                  field={field}
+                  sortBy={sorting.sortBy}
+                  direction={sorting.direction}
+                  onSort={() => sorting.onSort(field)}
+                />
+              ) : (
+                <th key={field} scope="col">
+                  {label}
+                </th>
+              ),
+            )}
             <th scope="col">Credits</th>
             {(onCancel || onView) && (
               <th scope="col" className="text-right">

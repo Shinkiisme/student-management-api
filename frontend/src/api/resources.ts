@@ -4,13 +4,15 @@ import type {
   CourseInput,
   Enrollment,
   EnrollmentInput,
+  EnrollmentListQuery,
+  EnrollmentPageQuery,
   ListQuery,
   PageResponse,
   Student,
   StudentInput,
 } from "../types/api";
 
-export function queryString(query: ListQuery): string {
+export function queryString(query: ListQuery | EnrollmentListQuery): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) {
     if (value !== undefined) params.set(key, String(value));
@@ -41,24 +43,20 @@ function resourceApi<T, P>(path: string): ResourceApi<T, P> {
 
 export const studentsApi = resourceApi<Student, StudentInput>("/students");
 export const coursesApi = resourceApi<Course, CourseInput>("/courses");
-async function legacyEnrollments(
-  path: string,
-  signal?: AbortSignal,
-): Promise<Enrollment[]> {
-  const response = await request<unknown>(path, { signal });
-  if (!Array.isArray(response)) {
-    throw new Error(
-      "This API now returns paginated enrollments. Enrollment list support is deferred to Phase 2.",
-    );
-  }
-  return response as Enrollment[];
-}
 export const enrollmentsApi = {
-  list: (signal?: AbortSignal) => legacyEnrollments("/enrollments", signal),
+  list: (query: EnrollmentListQuery, signal?: AbortSignal) =>
+    request<PageResponse<Enrollment>>(`/enrollments?${queryString(query)}`, {
+      signal,
+    }),
   get: (id: number, signal?: AbortSignal) =>
     request<Enrollment>(`/enrollments/${id}`, { signal }),
-  byStudent: (id: number, signal?: AbortSignal) =>
-    legacyEnrollments(`/students/${id}/enrollments`, signal),
+  byStudent: (id: number, query: EnrollmentPageQuery, signal?: AbortSignal) => {
+    const { page, size, sortBy, direction } = query;
+    return request<PageResponse<Enrollment>>(
+      `/students/${id}/enrollments?${queryString({ page, size, sortBy, direction })}`,
+      { signal },
+    );
+  },
   create: (input: EnrollmentInput) =>
     request<Enrollment>("/enrollments", {
       method: "POST",

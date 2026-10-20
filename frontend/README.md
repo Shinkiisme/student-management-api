@@ -32,9 +32,9 @@ Logout cannot invalidate an already issued access JWT, which may remain valid on
 
 ## Features
 
-- Dashboard counts from the actual student/course totals and enrollment array, plus a student directory preview and course enrollment counts. Failed requests show unavailable values and retry controls.
+- Dashboard global student, course, and enrollment counts come from each paginated response's `totalElements`. The enrollment count requests only page 0 with size 1. The course snapshot shows actual credit requirements for the first five courses by ID; it does not infer course enrollment counts from one page or download all enrollments. Failed requests show unavailable values and independent retry controls.
 - Students and courses: paginated tables, column sorting, exact age/credits filters, create/edit forms, fetched detail pages, and confirmed deletion. The frontend respects the backend's sorting keys, integer limits, DTO field names, and validation.
-- Enrollment registration/cancellation and details remain ADMIN-only. Searchable selectors collect **every** student/course page at size 100 using stable ID ordering; a failed page blocks registration rather than providing partial options. Enrollment pagination is explicitly deferred to Phase 2 (see below).
+- ADMIN enrollment management includes server pagination, sorting by enrollment/student/course ID, and server-side student filtering. Student details show a separately paginated enrollment list with the correct student total. Registration/cancellation, details, names/codes, notifications, and confirmation dialogs are preserved. Searchable selectors collect **every** student/course page at size 100 using stable ID ordering; a failed page blocks registration rather than providing partial options.
 - Loading, empty, success, and error states. ProblemDetail field errors remain in forms, conflicts retain their backend messages, pending mutations block repeat submissions, and obsolete reads are aborted. Native dialogs support keyboard focus containment and Escape dismissal.
 - Responsive sidebar/mobile navigation, scrollable tables, keyboard focus indicators, and reduced-motion support.
 
@@ -60,6 +60,28 @@ npm run build
 ```
 
 Real-account manual verification steps and the results actually executed are recorded in [authentication-verification.md](docs/authentication-verification.md).
+
+Phase 2 pagination/dashboard tests and read-only manual checks are described in [enrollment-pagination-verification.md](docs/enrollment-pagination-verification.md). Mutation refresh/recovery tests use isolated in-memory fixtures and do not modify a database.
+
+## Enrollment API and paging
+
+The frontend uses the existing authenticated HTTP client:
+
+```typescript
+enrollmentsApi.list(query, signal)                  // Promise<PageResponse<Enrollment>>
+enrollmentsApi.byStudent(studentId, query, signal)  // Promise<PageResponse<Enrollment>>
+enrollmentsApi.get(id, signal)                     // Promise<Enrollment>
+```
+
+`list` sends `GET /enrollments?page=0&size=10&sortBy=id&direction=asc` and adds `studentId` only when filtering. `byStudent` sends `GET /students/{studentId}/enrollments` with the four pagination/sorting parameters; identity appears only in the path. Both responses contain `content`, `page`, `size`, `totalElements`, and `totalPages`.
+
+- Page indices start at zero; default size is 10. Supported page sizes are 1–100; the UI offers 5, 10, 25, 50, and 100.
+- Allowed enrollment sort keys are exactly `id`, `studentId`, and `courseId`, with `asc` or `desc` direction. Student/course column sorting uses their IDs while retaining readable names and codes.
+- Changing student filter, sort, or page size resets to page zero. The selected student filter remains in the URL; clearing it removes the server filter. Invalid IDs show an error before an enrollment request is sent.
+- Counts and navigation use server metadata, while table rows use `content`. Registration and cancellation refresh the current page. If deletion or a concurrent change makes it invalid, the list moves to the last valid page. Obsolete reads are aborted/ignored through the existing request hook.
+- POST `/enrollments` still sends `{ studentId, courseId }`; DELETE `/enrollments/{id}` still accepts HTTP 204. JWT injection, refresh rotation, session cleanup, and 401/403 handling are unchanged.
+
+Enrollment endpoints remain ADMIN-only in the frontend. Student detail uses the selected resource's Student ID; JWT `sub` remains a User ID and is never substituted for it.
 
 ## API base and production hosting
 
@@ -102,6 +124,6 @@ docs/             Design, implementation plan, and verification record
 
 ## Operational limits
 
-The current backend returns paginated objects for `/enrollments` and `/students/{id}/enrollments`, while the existing frontend screens expect arrays. The Enrollment Pagination upgrade is intentionally **not implemented in Phase 1**. A response-shape guard shows an explicit error for the new format, so the dashboard and detail pages stay usable instead of crashing or presenting incomplete counts. Enrollment totals, course enrollment counts, enrollment lists, and personal enrollment lists remain unavailable with that response format until Phase 2. Legacy array responses remain supported. This limitation does not affect course or student CRUD, single-enrollment details, registration, or cancellation endpoints.
+The backend does not expose aggregate course enrollment counts, so the dashboard deliberately shows course credit requirements instead of a global enrollment distribution. Summaries are independent requests, not a transactional snapshot.
 
-Phase 2 should add typed paginated enrollment responses, server pagination/filtering/sorting, and dashboard totals from `totalElements`. Enrollment selectors still load complete student/course directories; very large deployments would benefit from a backend search endpoint. Student self-service needs a separate authenticated User-to-Student identity contract before adding personal profiles/enrollments. Production security and hosting follow the existing backend environment.
+Enrollment selectors still load complete student/course directories; very large deployments would benefit from backend search endpoints. Student self-service needs a separate authenticated User-to-Student identity contract before adding personal profiles/enrollments. Production security and hosting follow the existing backend environment. Earlier documents under docs/ record previous phases; the Phase 2 verification document describes current enrollment behavior.
