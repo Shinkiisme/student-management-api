@@ -89,6 +89,15 @@ public class RefreshTokenService {
                 .ifPresent(token -> refreshTokenRepository.revokeById(token.getId()));
     }
 
+    @Transactional
+    public int cleanupObsoleteTokens() {
+        Instant cutoff = Instant
+                .now()
+                .minus(Duration.ofDays(30));
+
+        return refreshTokenRepository.deleteObsolete(cutoff);
+    }
+
     private String generateToken() {
         byte[] randomBytes = new byte[TOKEN_SIZE_BYTES];
 

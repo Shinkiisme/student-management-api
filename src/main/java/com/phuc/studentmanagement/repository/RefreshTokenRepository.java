@@ -1,5 +1,6 @@
 package com.phuc.studentmanagement.repository;
 
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
@@ -70,5 +71,18 @@ public class RefreshTokenRepository {
         int affectedRow = jdbcTemplate.update(sql, id);
 
         return affectedRow == 1;
+    }
+
+    public int deleteObsolete(Instant cutoff) {
+        String sql = """
+                    DELETE FROM refresh_tokens
+                    WHERE expires_at < ?
+                        OR revoked_at < ?
+                """;
+
+        return jdbcTemplate.update(
+                sql,
+                OffsetDateTime.ofInstant(cutoff, ZoneOffset.UTC),
+                OffsetDateTime.ofInstant(cutoff, ZoneOffset.UTC));
     }
 }

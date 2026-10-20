@@ -263,6 +263,48 @@ class RefreshTokenServiceTest {
         verify(refreshTokenRepository).insert(any(RefreshToken.class));
     }
 
+    @Test
+    void cleanupObsoleteTokens_shouldUseCutoffThirtyDaysAgo() {
+        Instant earliestCutoff = Instant.now().minus(Duration.ofDays(30));
+
+        refreshTokenService.cleanupObsoleteTokens();
+
+        Instant latestCutoff = Instant.now().minus(Duration.ofDays(30));
+        ArgumentCaptor<Instant> captor = ArgumentCaptor.forClass(Instant.class);
+        verify(refreshTokenRepository).deleteObsolete(captor.capture());
+
+        Instant actualCutoff = captor.getValue();
+        assertFalse(actualCutoff.isBefore(earliestCutoff));
+        assertFalse(actualCutoff.isAfter(latestCutoff));
+    }
+
+    @Test
+    void cleanupObsoleteTokens_shouldReturnDeletedCount() {
+        when(refreshTokenRepository.deleteObsolete(any(Instant.class))).thenReturn(7);
+
+        int deletedCount = refreshTokenService.cleanupObsoleteTokens();
+
+        assertEquals(7, deletedCount);
+        verify(refreshTokenRepository).deleteObsolete(any(Instant.class));
+    }
+
+    @Test
+    void cleanupObsoleteTokens_shouldReturnZero_whenNoTokensAreDeleted() {
+        int deletedCount = refreshTokenService.cleanupObsoleteTokens();
+
+        assertEquals(0, deletedCount);
+        verify(refreshTokenRepository).deleteObsolete(any(Instant.class));
+    }
+
+    @Test
+    void cleanupObsoleteTokens_shouldPropagateRepositoryFailure() {
+        when(refreshTokenRepository.deleteObsolete(any(Instant.class)))
+                .thenThrow(new DataAccessResourceFailureException("Database unavailable"));
+
+        assertThrows(DataAccessResourceFailureException.class,
+                () -> refreshTokenService.cleanupObsoleteTokens());
+    }
+
     private RefreshToken activeToken(long id, int userId, String hash) {
         return new RefreshToken(
                 id, userId, hash, Instant.now().minusSeconds(60),

@@ -166,4 +166,106 @@ class RefreshTokenRepositoryIntegrationTest {
 
         assertFalse(revoked);
     }
+
+    @Test
+    void deleteObsolete_shouldDeleteTokenExpiredBeforeCutoff() {
+        Instant cutoff = Instant.now().minus(30, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
+        RefreshToken created = insertToken("i", cutoff.minus(1, ChronoUnit.DAYS));
+
+        int deleted = refreshTokenRepository.deleteObsolete(cutoff);
+
+        assertEquals(1, deleted);
+        assertTrue(refreshTokenRepository.findByTokenHash(created.getTokenHash()).isEmpty());
+    }
+
+    @Test
+    void deleteObsolete_shouldDeleteTokenRevokedBeforeCutoff() {
+        Instant cutoff = Instant.now().minus(30, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
+        RefreshToken created = insertToken("j", cutoff.plus(1, ChronoUnit.DAYS));
+        setRevokedAt(created, cutoff.minus(1, ChronoUnit.DAYS));
+
+        int deleted = refreshTokenRepository.deleteObsolete(cutoff);
+
+        assertEquals(1, deleted);
+        assertTrue(refreshTokenRepository.findByTokenHash(created.getTokenHash()).isEmpty());
+    }
+
+    @Test
+    void deleteObsolete_shouldKeepActiveToken() {
+        Instant cutoff = Instant.now().minus(30, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
+        RefreshToken created = insertToken("k", Instant.now().plus(7, ChronoUnit.DAYS));
+
+        int deleted = refreshTokenRepository.deleteObsolete(cutoff);
+
+        assertEquals(0, deleted);
+        assertTrue(refreshTokenRepository.findByTokenHash(created.getTokenHash()).isPresent());
+    }
+
+    @Test
+    void deleteObsolete_shouldKeepRecentlyExpiredToken() {
+        Instant cutoff = Instant.now().minus(30, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
+        RefreshToken created = insertToken("l", cutoff.plus(1, ChronoUnit.DAYS));
+
+        int deleted = refreshTokenRepository.deleteObsolete(cutoff);
+
+        assertEquals(0, deleted);
+        assertTrue(refreshTokenRepository.findByTokenHash(created.getTokenHash()).isPresent());
+    }
+
+    @Test
+    void deleteObsolete_shouldKeepRecentlyRevokedToken() {
+        Instant cutoff = Instant.now().minus(30, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
+        RefreshToken created = insertToken("m", Instant.now().plus(7, ChronoUnit.DAYS));
+        setRevokedAt(created, cutoff.plus(1, ChronoUnit.DAYS));
+
+        int deleted = refreshTokenRepository.deleteObsolete(cutoff);
+
+        assertEquals(0, deleted);
+        assertTrue(refreshTokenRepository.findByTokenHash(created.getTokenHash()).isPresent());
+    }
+
+    @Test
+    void deleteObsolete_shouldKeepTokensExactlyAtCutoff() {
+        Instant cutoff = Instant.now().minus(30, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
+        RefreshToken expiredAtCutoff = insertToken("n", cutoff);
+        RefreshToken revokedAtCutoff = insertToken("o", cutoff.plus(1, ChronoUnit.DAYS));
+        setRevokedAt(revokedAtCutoff, cutoff);
+
+        int deleted = refreshTokenRepository.deleteObsolete(cutoff);
+
+        assertEquals(0, deleted);
+        assertTrue(refreshTokenRepository.findByTokenHash(expiredAtCutoff.getTokenHash()).isPresent());
+        assertTrue(refreshTokenRepository.findByTokenHash(revokedAtCutoff.getTokenHash()).isPresent());
+    }
+
+    @Test
+    void deleteObsolete_shouldDeleteOnlyEligibleTokensAndReturnCorrectCount() {
+        Instant cutoff = Instant.now().minus(30, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
+        RefreshToken oldExpired = insertToken("p", cutoff.minus(1, ChronoUnit.DAYS));
+        RefreshToken oldRevoked = insertToken("q", cutoff.plus(1, ChronoUnit.DAYS));
+        setRevokedAt(oldRevoked, cutoff.minus(1, ChronoUnit.DAYS));
+        RefreshToken recentlyExpired = insertToken("r", cutoff.plus(1, ChronoUnit.DAYS));
+        RefreshToken active = insertToken("s", Instant.now().plus(7, ChronoUnit.DAYS));
+
+        int deleted = refreshTokenRepository.deleteObsolete(cutoff);
+
+        assertEquals(2, deleted);
+        assertTrue(refreshTokenRepository.findByTokenHash(oldExpired.getTokenHash()).isEmpty());
+        assertTrue(refreshTokenRepository.findByTokenHash(oldRevoked.getTokenHash()).isEmpty());
+        assertTrue(refreshTokenRepository.findByTokenHash(recentlyExpired.getTokenHash()).isPresent());
+        assertTrue(refreshTokenRepository.findByTokenHash(active.getTokenHash()).isPresent());
+    }
+
+    private RefreshToken insertToken(String hashCharacter, Instant expiresAt) {
+        return refreshTokenRepository.insert(new RefreshToken(
+                0L, userId, hashCharacter.repeat(64), null, expiresAt, null));
+    }
+
+    private void setRevokedAt(RefreshToken token, Instant revokedAt) {
+        jdbcTemplate.update("""
+                UPDATE refresh_tokens
+                SET revoked_at = ?
+                WHERE id = ?
+                """, OffsetDateTime.ofInstant(revokedAt, ZoneOffset.UTC), token.getId());
+    }
 }
