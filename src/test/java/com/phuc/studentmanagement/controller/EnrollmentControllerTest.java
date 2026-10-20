@@ -3,6 +3,8 @@ package com.phuc.studentmanagement.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -27,8 +29,12 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.phuc.studentmanagement.exception.EnrollmentAlreadyExistsException;
+import com.phuc.studentmanagement.exception.InvalidPaginationException;
 import com.phuc.studentmanagement.exception.ResourceNotFoundException;
 import com.phuc.studentmanagement.model.Enrollment;
+import com.phuc.studentmanagement.pagination.PageRequest;
+import com.phuc.studentmanagement.pagination.PageResult;
+import com.phuc.studentmanagement.pagination.SortDirection;
 import com.phuc.studentmanagement.service.EnrollmentService;
 
 @WebMvcTest(EnrollmentController.class)
@@ -47,32 +53,172 @@ class EnrollmentControllerTest {
                 Enrollment enrollment1 = new Enrollment(1, 1, 2);
                 Enrollment enrollment2 = new Enrollment(2, 1, 3);
 
-                when(enrollmentService.getAllEnrollments())
-                                .thenReturn(List.of(enrollment1, enrollment2));
+                when(enrollmentService.getEnrollmentsPage(any(PageRequest.class), isNull()))
+                                .thenReturn(new PageResult<>(List.of(enrollment1, enrollment2), 0, 10, 2));
 
                 mockMvc.perform(get("/enrollments"))
                                 .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.length()").value(2))
-                                .andExpect(jsonPath("$[0].id").value(1))
-                                .andExpect(jsonPath("$[0].studentId").value(1))
-                                .andExpect(jsonPath("$[0].courseId").value(2))
-                                .andExpect(jsonPath("$[1].id").value(2))
-                                .andExpect(jsonPath("$[1].studentId").value(1))
-                                .andExpect(jsonPath("$[1].courseId").value(3));
+                                .andExpect(jsonPath("$.content.length()").value(2))
+                                .andExpect(jsonPath("$.content[0].id").value(1))
+                                .andExpect(jsonPath("$.content[0].studentId").value(1))
+                                .andExpect(jsonPath("$.content[0].courseId").value(2))
+                                .andExpect(jsonPath("$.content[1].id").value(2))
+                                .andExpect(jsonPath("$.content[1].studentId").value(1))
+                                .andExpect(jsonPath("$.content[1].courseId").value(3))
+                                .andExpect(jsonPath("$.page").value(0))
+                                .andExpect(jsonPath("$.size").value(10))
+                                .andExpect(jsonPath("$.totalElements").value(2))
+                                .andExpect(jsonPath("$.totalPages").value(1));
 
-                verify(enrollmentService).getAllEnrollments();
+                verify(enrollmentService).getEnrollmentsPage(argThat(request -> request.page() == 0
+                                && request.size() == 10
+                                && "id".equals(request.sortBy())
+                                && request.direction() == SortDirection.ASC), isNull());
         }
 
         @Test
         void getAllEnrollments_shouldReturnEmptyList_whenNoEnrollmentsExist() throws Exception {
-                when(enrollmentService.getAllEnrollments())
-                                .thenReturn(List.of());
+                when(enrollmentService.getEnrollmentsPage(any(PageRequest.class), isNull()))
+                                .thenReturn(new PageResult<>(List.of(), 0, 10, 0));
 
                 mockMvc.perform(get("/enrollments"))
                                 .andExpect(status().isOk())
-                                .andExpect(content().json("[]"));
+                                .andExpect(jsonPath("$.content").isArray())
+                                .andExpect(jsonPath("$.content.length()").value(0))
+                                .andExpect(jsonPath("$.page").value(0))
+                                .andExpect(jsonPath("$.size").value(10))
+                                .andExpect(jsonPath("$.totalElements").value(0))
+                                .andExpect(jsonPath("$.totalPages").value(0));
 
-                verify(enrollmentService).getAllEnrollments();
+                verify(enrollmentService).getEnrollmentsPage(any(PageRequest.class), isNull());
+        }
+
+        @Test
+        void getAllEnrollments_shouldApplyCustomPaginationAndSorting() throws Exception {
+                Enrollment enrollment = new Enrollment(8, 3, 5);
+                when(enrollmentService.getEnrollmentsPage(any(PageRequest.class), isNull()))
+                                .thenReturn(new PageResult<>(List.of(enrollment), 1, 2, 5));
+
+                mockMvc.perform(get("/enrollments")
+                                .param("page", "1")
+                                .param("size", "2")
+                                .param("sortBy", "courseId")
+                                .param("direction", "DESC"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content.length()").value(1))
+                                .andExpect(jsonPath("$.content[0].id").value(8))
+                                .andExpect(jsonPath("$.page").value(1))
+                                .andExpect(jsonPath("$.size").value(2))
+                                .andExpect(jsonPath("$.totalElements").value(5))
+                                .andExpect(jsonPath("$.totalPages").value(3));
+
+                verify(enrollmentService).getEnrollmentsPage(argThat(request -> request.page() == 1
+                                && request.size() == 2
+                                && "courseId".equals(request.sortBy())
+                                && request.direction() == SortDirection.DESC), isNull());
+        }
+
+        @Test
+        void getAllEnrollments_shouldFilterByStudentId() throws Exception {
+                Enrollment enrollment = new Enrollment(13, 7, 2);
+                when(enrollmentService.getEnrollmentsPage(any(PageRequest.class), eq(7)))
+                                .thenReturn(new PageResult<>(List.of(enrollment), 0, 10, 1));
+
+                mockMvc.perform(get("/enrollments").param("studentId", "7"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content.length()").value(1))
+                                .andExpect(jsonPath("$.content[0].studentId").value(7))
+                                .andExpect(jsonPath("$.totalElements").value(1));
+
+                verify(enrollmentService).getEnrollmentsPage(any(PageRequest.class), eq(7));
+        }
+
+        @Test
+        void getAllEnrollments_shouldReturnNotFound_whenStudentFilterDoesNotExist() throws Exception {
+                when(enrollmentService.getEnrollmentsPage(any(PageRequest.class), eq(999)))
+                                .thenThrow(new ResourceNotFoundException("Student", 999));
+
+                mockMvc.perform(get("/enrollments").param("studentId", "999"))
+                                .andExpect(status().isNotFound())
+                                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                                .andExpect(jsonPath("$.status").value(404))
+                                .andExpect(jsonPath("$.detail").value("Student with id 999 not found"));
+
+                verify(enrollmentService).getEnrollmentsPage(any(PageRequest.class), eq(999));
+        }
+
+        @Test
+        void getAllEnrollments_shouldReturnBadRequest_whenPageIsNegative() throws Exception {
+                mockMvc.perform(get("/enrollments").param("page", "-1"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.status").value(400))
+                                .andExpect(jsonPath("$.detail").value("Page must not be negative"));
+
+                verifyNoInteractions(enrollmentService);
+        }
+
+        @Test
+        void getAllEnrollments_shouldReturnBadRequest_whenSizeIsZero() throws Exception {
+                mockMvc.perform(get("/enrollments").param("size", "0"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.status").value(400))
+                                .andExpect(jsonPath("$.detail").value("Size must be between 1 and 100"));
+
+                verifyNoInteractions(enrollmentService);
+        }
+
+        @Test
+        void getAllEnrollments_shouldReturnBadRequest_whenSizeExceedsMaximum() throws Exception {
+                mockMvc.perform(get("/enrollments").param("size", "101"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.status").value(400))
+                                .andExpect(jsonPath("$.detail").value("Size must be between 1 and 100"));
+
+                verifyNoInteractions(enrollmentService);
+        }
+
+        @Test
+        void getAllEnrollments_shouldReturnBadRequest_whenDirectionIsInvalid() throws Exception {
+                mockMvc.perform(get("/enrollments").param("direction", "sideways"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.status").value(400))
+                                .andExpect(jsonPath("$.detail").value("Direction must be asc or desc"));
+
+                verifyNoInteractions(enrollmentService);
+        }
+
+        @Test
+        void getAllEnrollments_shouldReturnBadRequest_whenStudentIdIsZero() throws Exception {
+                mockMvc.perform(get("/enrollments").param("studentId", "0"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.status").value(400))
+                                .andExpect(jsonPath("$.detail").value("Student ID must be positive"));
+
+                verifyNoInteractions(enrollmentService);
+        }
+
+        @Test
+        void getAllEnrollments_shouldReturnBadRequest_whenStudentIdIsNegative() throws Exception {
+                mockMvc.perform(get("/enrollments").param("studentId", "-5"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.status").value(400))
+                                .andExpect(jsonPath("$.detail").value("Student ID must be positive"));
+
+                verifyNoInteractions(enrollmentService);
+        }
+
+        @Test
+        void getAllEnrollments_shouldReturnBadRequest_whenSortByIsInvalid() throws Exception {
+                when(enrollmentService.getEnrollmentsPage(any(PageRequest.class), isNull()))
+                                .thenThrow(new InvalidPaginationException("Invalid sort field: invalid"));
+
+                mockMvc.perform(get("/enrollments").param("sortBy", "invalid"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.status").value(400))
+                                .andExpect(jsonPath("$.detail").value("Invalid sort field: invalid"));
+
+                verify(enrollmentService).getEnrollmentsPage(argThat(request -> "invalid".equals(request.sortBy())),
+                                isNull());
         }
 
         @Test

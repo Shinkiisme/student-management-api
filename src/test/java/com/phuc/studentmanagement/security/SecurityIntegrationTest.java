@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -245,7 +246,7 @@ class SecurityIntegrationTest {
                 mockMvc.perform(get("/students/{studentId}/enrollments", ownStudentId)
                                 .header("Authorization", "Bearer " + token))
                                 .andExpect(status().isOk())
-                                .andExpect(jsonPath("$").isArray());
+                                .andExpect(jsonPath("$.content").isArray());
         }
 
         @Test
@@ -568,6 +569,195 @@ class SecurityIntegrationTest {
                 mockMvc.perform(get("/students")
                                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
                                 .andExpect(status().isOk());
+        }
+
+        @Test
+        void getStudentEnrollments_shouldReturnOnlyOwnEnrollments_withStudentJwt() throws Exception {
+                int firstCourseId = createCourse();
+                int secondCourseId = createCourse();
+                int thirdCourseId = createCourse();
+                int firstOwnEnrollmentId = createEnrollment(ownStudentId, firstCourseId);
+                createEnrollment(otherStudentId, secondCourseId);
+                int secondOwnEnrollmentId = createEnrollment(ownStudentId, thirdCourseId);
+                String token = login(STUDENT_USERNAME, PASSWORD);
+
+                mockMvc.perform(get("/students/{studentId}/enrollments", ownStudentId)
+                                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content.length()").value(2))
+                                .andExpect(jsonPath("$.content[0].id").value(firstOwnEnrollmentId))
+                                .andExpect(jsonPath("$.content[0].studentId").value(ownStudentId))
+                                .andExpect(jsonPath("$.content[1].id").value(secondOwnEnrollmentId))
+                                .andExpect(jsonPath("$.content[1].studentId").value(ownStudentId))
+                                .andExpect(jsonPath("$.totalElements").value(2))
+                                .andExpect(jsonPath("$.totalPages").value(1));
+        }
+
+        @Test
+        void getStudentEnrollments_shouldReturnForbidden_whenOtherStudentHasEnrollments() throws Exception {
+                int courseId = createCourse();
+                createEnrollment(otherStudentId, courseId);
+                String token = login(STUDENT_USERNAME, PASSWORD);
+
+                mockMvc.perform(get("/students/{studentId}/enrollments", otherStudentId)
+                                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                                .andExpect(status().isForbidden())
+                                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                                .andExpect(jsonPath("$.status").value(403))
+                                .andExpect(jsonPath("$.detail")
+                                                .value("You do not have permission to access this resource"));
+        }
+
+        @Test
+        void getStudentEnrollments_shouldReturnOnlyRequestedStudentEnrollments_withAdminJwt() throws Exception {
+                int firstCourseId = createCourse();
+                int secondCourseId = createCourse();
+                createEnrollment(ownStudentId, firstCourseId);
+                int otherEnrollmentId = createEnrollment(otherStudentId, secondCourseId);
+                String token = login(ADMIN_USERNAME, PASSWORD);
+
+                mockMvc.perform(get("/students/{studentId}/enrollments", otherStudentId)
+                                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content.length()").value(1))
+                                .andExpect(jsonPath("$.content[0].id").value(otherEnrollmentId))
+                                .andExpect(jsonPath("$.content[0].studentId").value(otherStudentId))
+                                .andExpect(jsonPath("$.totalElements").value(1));
+        }
+
+        @Test
+        void getStudentEnrollments_shouldReturnUnauthorized_withoutJwt() throws Exception {
+                mockMvc.perform(get("/students/{studentId}/enrollments", ownStudentId))
+                                .andExpect(status().isUnauthorized())
+                                .andExpect(header().string(HttpHeaders.WWW_AUTHENTICATE, startsWith("Bearer")))
+                                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                                .andExpect(jsonPath("$.status").value(401))
+                                .andExpect(jsonPath("$.detail").value("Authentication is required"));
+        }
+
+        @Test
+        void getStudentEnrollments_shouldPaginateOnlyOwnEnrollments() throws Exception {
+                int firstCourseId = createCourse();
+                int secondCourseId = createCourse();
+                int thirdCourseId = createCourse();
+                int firstOwnEnrollmentId = createEnrollment(ownStudentId, firstCourseId);
+                createEnrollment(otherStudentId, secondCourseId);
+                int secondOwnEnrollmentId = createEnrollment(ownStudentId, thirdCourseId);
+                String token = login(STUDENT_USERNAME, PASSWORD);
+
+                mockMvc.perform(get("/students/{studentId}/enrollments", ownStudentId)
+                                .param("page", "0")
+                                .param("size", "1")
+                                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content.length()").value(1))
+                                .andExpect(jsonPath("$.content[0].id").value(firstOwnEnrollmentId))
+                                .andExpect(jsonPath("$.page").value(0))
+                                .andExpect(jsonPath("$.size").value(1))
+                                .andExpect(jsonPath("$.totalElements").value(2))
+                                .andExpect(jsonPath("$.totalPages").value(2));
+
+                mockMvc.perform(get("/students/{studentId}/enrollments", ownStudentId)
+                                .param("page", "1")
+                                .param("size", "1")
+                                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content.length()").value(1))
+                                .andExpect(jsonPath("$.content[0].id").value(secondOwnEnrollmentId))
+                                .andExpect(jsonPath("$.page").value(1))
+                                .andExpect(jsonPath("$.totalElements").value(2))
+                                .andExpect(jsonPath("$.totalPages").value(2));
+        }
+
+        @Test
+        void getStudentEnrollments_shouldSortByCourseIdDescending() throws Exception {
+                int firstCourseId = createCourse();
+                int secondCourseId = createCourse();
+                int otherCourseId = createCourse();
+                createEnrollment(ownStudentId, firstCourseId);
+                createEnrollment(ownStudentId, secondCourseId);
+                createEnrollment(otherStudentId, otherCourseId);
+                String token = login(STUDENT_USERNAME, PASSWORD);
+
+                mockMvc.perform(get("/students/{studentId}/enrollments", ownStudentId)
+                                .param("sortBy", "courseId")
+                                .param("direction", "desc")
+                                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content.length()").value(2))
+                                .andExpect(jsonPath("$.content[0].courseId").value(secondCourseId))
+                                .andExpect(jsonPath("$.content[1].courseId").value(firstCourseId))
+                                .andExpect(jsonPath("$.totalElements").value(2));
+        }
+
+        @Test
+        void getEnrollments_shouldFilterByStudentId_withAdminJwt() throws Exception {
+                int firstCourseId = createCourse();
+                int secondCourseId = createCourse();
+                int ownEnrollmentId = createEnrollment(ownStudentId, firstCourseId);
+                createEnrollment(otherStudentId, secondCourseId);
+                String token = login(ADMIN_USERNAME, PASSWORD);
+
+                mockMvc.perform(get("/enrollments")
+                                .param("studentId", String.valueOf(ownStudentId))
+                                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content.length()").value(1))
+                                .andExpect(jsonPath("$.content[0].id").value(ownEnrollmentId))
+                                .andExpect(jsonPath("$.content[0].studentId").value(ownStudentId))
+                                .andExpect(jsonPath("$.totalElements").value(1));
+        }
+
+        @Test
+        void getEnrollments_shouldReturnPaginatedResultsAcrossStudents_withAdminJwt() throws Exception {
+                int firstCourseId = createCourse();
+                int secondCourseId = createCourse();
+                int firstEnrollmentId = createEnrollment(ownStudentId, firstCourseId);
+                createEnrollment(otherStudentId, secondCourseId);
+                String token = login(ADMIN_USERNAME, PASSWORD);
+
+                mockMvc.perform(get("/enrollments")
+                                .param("page", "0")
+                                .param("size", "1")
+                                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.content.length()").value(1))
+                                .andExpect(jsonPath("$.content[0].id").value(firstEnrollmentId))
+                                .andExpect(jsonPath("$.page").value(0))
+                                .andExpect(jsonPath("$.size").value(1))
+                                .andExpect(jsonPath("$.totalElements").value(2))
+                                .andExpect(jsonPath("$.totalPages").value(2));
+        }
+
+        @Test
+        void getEnrollments_shouldReturnForbidden_whenStudentFiltersByOwnId() throws Exception {
+                String token = login(STUDENT_USERNAME, PASSWORD);
+
+                mockMvc.perform(get("/enrollments")
+                                .param("studentId", String.valueOf(ownStudentId))
+                                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                                .andExpect(status().isForbidden())
+                                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                                .andExpect(jsonPath("$.status").value(403));
+        }
+
+        private int createCourse() {
+                return jdbcTemplate.queryForObject("""
+                                INSERT INTO courses (code, name, credits)
+                                VALUES (?, ?, ?)
+                                RETURNING id
+                                """, Integer.class,
+                                "SEC_" + UUID.randomUUID().toString().substring(0, 12),
+                                "Security Enrollment Course",
+                                3);
+        }
+
+        private int createEnrollment(int studentId, int courseId) {
+                return jdbcTemplate.queryForObject("""
+                                INSERT INTO enrollments (student_id, course_id)
+                                VALUES (?, ?)
+                                RETURNING id
+                                """, Integer.class, studentId, courseId);
         }
 
         private String loginForRefreshToken(String username, String password) throws Exception {

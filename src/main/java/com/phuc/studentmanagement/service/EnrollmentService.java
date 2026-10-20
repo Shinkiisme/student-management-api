@@ -11,6 +11,8 @@ import org.springframework.stereotype.Service;
 import com.phuc.studentmanagement.exception.EnrollmentAlreadyExistsException;
 import com.phuc.studentmanagement.exception.ResourceNotFoundException;
 import com.phuc.studentmanagement.model.Enrollment;
+import com.phuc.studentmanagement.pagination.PageRequest;
+import com.phuc.studentmanagement.pagination.PageResult;
 import com.phuc.studentmanagement.repository.CourseRepository;
 import com.phuc.studentmanagement.repository.EnrollmentRepository;
 import com.phuc.studentmanagement.repository.StudentRepository;
@@ -43,6 +45,15 @@ public class EnrollmentService {
 
     public Optional<Enrollment> getEnrollmentById(int id) {
         return enrollmentRepository.findById(id);
+    }
+
+    public PageResult<Enrollment> getEnrollmentsPage(PageRequest request, Integer studentId) {
+        if (studentId != null) {
+            studentRepository.findById(studentId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Student", studentId));
+        }
+
+        return enrollmentRepository.findPage(request, studentId);
     }
 
     public Enrollment addEnrollment(Enrollment enrollment) {

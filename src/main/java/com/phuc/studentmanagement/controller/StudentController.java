@@ -52,8 +52,7 @@ public class StudentController {
         SortDirection sortDirection;
 
         try {
-            sortDirection = SortDirection.valueOf(
-                    direction.toUpperCase(Locale.ROOT));
+            sortDirection = SortDirection.valueOf(direction.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException exception) {
             throw new InvalidPaginationException("Direction must be asc or desc");
         }
@@ -61,7 +60,11 @@ public class StudentController {
         PageRequest request;
 
         try {
-            request = new PageRequest(page, size, sortBy, sortDirection);
+            request = new PageRequest(
+                    page,
+                    size,
+                    sortBy,
+                    sortDirection);
         } catch (IllegalArgumentException exception) {
             throw new InvalidPaginationException(exception.getMessage());
         }
