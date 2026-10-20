@@ -3,6 +3,7 @@ package com.phuc.studentmanagement.security;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.startsWith;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -380,6 +381,235 @@ class SecurityIntegrationTest {
                                 .andExpect(jsonPath("$.title").value("Forbidden"))
                                 .andExpect(jsonPath("$.detail")
                                                 .value("You do not have permission to access this resource"));
+        }
+
+        @Test
+        void login_shouldReturnRefreshToken_whenCredentialsAreCorrect() throws Exception {
+                String refreshToken = loginForRefreshToken(ADMIN_USERNAME, PASSWORD);
+
+                assertNotNull(refreshToken);
+                assertEquals(43, refreshToken.length());
+        }
+
+        @Test
+        void refresh_shouldReturnNewTokens_whenRefreshTokenIsValid() throws Exception {
+                String oldRefreshToken = loginForRefreshToken(ADMIN_USERNAME, PASSWORD);
+
+                String response = refreshSuccessfully(oldRefreshToken);
+
+                String newRefreshToken = JsonPath.read(response, "$.refreshToken");
+                String newAccessToken = JsonPath.read(response, "$.accessToken");
+
+                assertNotEquals(oldRefreshToken, newRefreshToken);
+
+                Jwt jwt = jwtDecoder.decode(newAccessToken);
+                assertEquals(String.valueOf(adminUserId), jwt.getSubject());
+                assertEquals("ADMIN", jwt.getClaimAsString("role"));
+                assertEquals("student-management-api", jwt.getClaimAsString("iss"));
+        }
+
+        @Test
+        void refresh_shouldReturnUnauthorized_whenOldRefreshTokenIsReused() throws Exception {
+                String oldRefreshToken = loginForRefreshToken(ADMIN_USERNAME, PASSWORD);
+
+                refreshSuccessfully(oldRefreshToken);
+
+                mockMvc.perform(post("/auth/refresh")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(refreshRequestBody(oldRefreshToken)))
+                                .andExpect(status().isUnauthorized())
+                                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                                .andExpect(jsonPath("$.status").value(401))
+                                .andExpect(jsonPath("$.title").value("Unauthorized"))
+                                .andExpect(jsonPath("$.detail").value("Invalid refresh token"));
+        }
+
+        @Test
+        void refresh_shouldAllowUsingRotatedRefreshToken() throws Exception {
+                String tokenA = loginForRefreshToken(ADMIN_USERNAME, PASSWORD);
+
+                String firstResponse = refreshSuccessfully(tokenA);
+                String tokenB = JsonPath.read(firstResponse, "$.refreshToken");
+
+                String secondResponse = refreshSuccessfully(tokenB);
+                String tokenC = JsonPath.read(secondResponse, "$.refreshToken");
+
+                assertNotEquals(tokenA, tokenB);
+                assertNotEquals(tokenB, tokenC);
+
+                String accessToken = JsonPath.read(secondResponse, "$.accessToken");
+                assertEquals(String.valueOf(adminUserId), jwtDecoder.decode(accessToken).getSubject());
+        }
+
+        @Test
+        void refresh_shouldReturnUnauthorized_whenRefreshTokenDoesNotExist() throws Exception {
+                mockMvc.perform(post("/auth/refresh")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(refreshRequestBody("unknown-refresh-token")))
+                                .andExpect(status().isUnauthorized())
+                                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                                .andExpect(jsonPath("$.status").value(401))
+                                .andExpect(jsonPath("$.title").value("Unauthorized"))
+                                .andExpect(jsonPath("$.detail").value("Invalid refresh token"));
+        }
+
+        @Test
+        void refresh_shouldReturnBadRequest_whenRefreshTokenIsBlank() throws Exception {
+                mockMvc.perform(post("/auth/refresh")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(refreshRequestBody("   ")))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                                .andExpect(jsonPath("$.status").value(400))
+                                .andExpect(jsonPath("$.detail").value("Request validation failed"))
+                                .andExpect(jsonPath("$.errors.refreshToken").exists());
+        }
+
+        @Test
+        void logout_shouldReturnNoContentAndRevokeRefreshToken() throws Exception {
+                String refreshToken = loginForRefreshToken(ADMIN_USERNAME, PASSWORD);
+
+                mockMvc.perform(post("/auth/logout")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(refreshRequestBody(refreshToken)))
+                                .andExpect(status().isNoContent())
+                                .andExpect(content().string(""));
+
+                mockMvc.perform(post("/auth/refresh")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(refreshRequestBody(refreshToken)))
+                                .andExpect(status().isUnauthorized())
+                                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                                .andExpect(jsonPath("$.status").value(401))
+                                .andExpect(jsonPath("$.detail").value("Invalid refresh token"));
+        }
+
+        @Test
+        void logout_shouldReturnNoContent_whenTokenAlreadyRevoked() throws Exception {
+                String refreshToken = loginForRefreshToken(ADMIN_USERNAME, PASSWORD);
+
+                mockMvc.perform(post("/auth/logout")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(refreshRequestBody(refreshToken)))
+                                .andExpect(status().isNoContent());
+
+                mockMvc.perform(post("/auth/logout")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(refreshRequestBody(refreshToken)))
+                                .andExpect(status().isNoContent())
+                                .andExpect(content().string(""));
+        }
+
+        @Test
+        void logout_shouldReturnNoContent_whenTokenDoesNotExist() throws Exception {
+                mockMvc.perform(post("/auth/logout")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(refreshRequestBody("unknown-refresh-token")))
+                                .andExpect(status().isNoContent())
+                                .andExpect(content().string(""));
+        }
+
+        @Test
+        void logout_shouldReturnBadRequest_whenRefreshTokenIsBlank() throws Exception {
+                mockMvc.perform(post("/auth/logout")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(refreshRequestBody("   ")))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                                .andExpect(jsonPath("$.status").value(400))
+                                .andExpect(jsonPath("$.detail").value("Request validation failed"))
+                                .andExpect(jsonPath("$.errors.refreshToken").exists());
+        }
+
+        @Test
+        void logout_shouldRevokeOnlyTheSubmittedRefreshToken() throws Exception {
+                String firstToken = loginForRefreshToken(ADMIN_USERNAME, PASSWORD);
+                String secondToken = loginForRefreshToken(ADMIN_USERNAME, PASSWORD);
+
+                mockMvc.perform(post("/auth/logout")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(refreshRequestBody(firstToken)))
+                                .andExpect(status().isNoContent());
+
+                mockMvc.perform(post("/auth/refresh")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(refreshRequestBody(firstToken)))
+                                .andExpect(status().isUnauthorized());
+
+                String response = refreshSuccessfully(secondToken);
+                String newToken = JsonPath.read(response, "$.refreshToken");
+
+                assertNotEquals(firstToken, newToken);
+                assertNotEquals(secondToken, newToken);
+        }
+
+        @Test
+        void logout_shouldNotImmediatelyInvalidateAnExistingAccessToken() throws Exception {
+                String loginResponse = mockMvc.perform(post("/auth/login")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                                {
+                                                  "username": "security_test_admin",
+                                                  "password": "SecurityTestPassword123!"
+                                                }
+                                                """))
+                                .andExpect(status().isOk())
+                                .andReturn()
+                                .getResponse()
+                                .getContentAsString();
+                String accessToken = JsonPath.read(loginResponse, "$.accessToken");
+                String refreshToken = JsonPath.read(loginResponse, "$.refreshToken");
+
+                mockMvc.perform(post("/auth/logout")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(refreshRequestBody(refreshToken)))
+                                .andExpect(status().isNoContent());
+
+                mockMvc.perform(get("/students")
+                                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+                                .andExpect(status().isOk());
+        }
+
+        private String loginForRefreshToken(String username, String password) throws Exception {
+                String body = """
+                                {
+                                  "username": "%s",
+                                  "password": "%s"
+                                }
+                                """.formatted(username, password);
+
+                String response = mockMvc.perform(post("/auth/login")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.refreshToken").isNotEmpty())
+                                .andReturn()
+                                .getResponse()
+                                .getContentAsString();
+
+                return JsonPath.read(response, "$.refreshToken");
+        }
+
+        private String refreshRequestBody(String rawRefreshToken) {
+                return """
+                                {
+                                  "refreshToken": "%s"
+                                }
+                                """.formatted(rawRefreshToken);
+        }
+
+        private String refreshSuccessfully(String rawRefreshToken) throws Exception {
+                return mockMvc.perform(post("/auth/refresh")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(refreshRequestBody(rawRefreshToken)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.accessToken").isNotEmpty())
+                                .andExpect(jsonPath("$.refreshToken").isNotEmpty())
+                                .andExpect(jsonPath("$.tokenType").value("Bearer"))
+                                .andExpect(jsonPath("$.expiresIn").value(900))
+                                .andReturn()
+                                .getResponse()
+                                .getContentAsString();
         }
 
         private String login(String username, String password) throws Exception {

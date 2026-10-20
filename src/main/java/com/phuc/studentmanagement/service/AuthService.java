@@ -13,69 +13,98 @@ import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.phuc.studentmanagement.dto.LoginRequestDTO;
 import com.phuc.studentmanagement.dto.LoginResponseDTO;
+import com.phuc.studentmanagement.exception.InvalidRefreshTokenException;
 import com.phuc.studentmanagement.model.User;
 import com.phuc.studentmanagement.repository.UserRepository;
 
 @Service
 public class AuthService {
-    private final AuthenticationManager authenticationManager;
-    private final UserRepository userRepository;
-    private final JwtEncoder jwtEncoder;
+        private final AuthenticationManager authenticationManager;
+        private final UserRepository userRepository;
+        private final RefreshTokenService refreshTokenService;
+        private final JwtEncoder jwtEncoder;
 
-    public AuthService(
-            AuthenticationManager authenticationManager,
-            UserRepository userRepository,
-            JwtEncoder jwtEncoder) {
-        this.authenticationManager = authenticationManager;
-        this.userRepository = userRepository;
-        this.jwtEncoder = jwtEncoder;
-    }
+        public AuthService(
+                        AuthenticationManager authenticationManager,
+                        UserRepository userRepository,
+                        RefreshTokenService refreshTokenService,
+                        JwtEncoder jwtEncoder) {
+                this.authenticationManager = authenticationManager;
+                this.userRepository = userRepository;
+                this.refreshTokenService = refreshTokenService;
+                this.jwtEncoder = jwtEncoder;
+        }
 
-    public Authentication authenticate(LoginRequestDTO request) {
-        return authenticationManager.authenticate(UsernamePasswordAuthenticationToken
-                .unauthenticated(
-                        request.username(),
-                        request.password()));
-    }
+        public Authentication authenticate(LoginRequestDTO request) {
+                return authenticationManager.authenticate(UsernamePasswordAuthenticationToken
+                                .unauthenticated(
+                                                request.username(),
+                                                request.password()));
+        }
 
-    public LoginResponseDTO login(LoginRequestDTO request) {
-        Authentication authentication = authenticate(request);
-        User user = userRepository.findByUsername(authentication.getName())
-                .orElseThrow(() -> new BadCredentialsException("Invalid username or password"));
+        @Transactional
+        public LoginResponseDTO login(LoginRequestDTO request) {
+                Authentication authentication = authenticate(request);
+                User user = userRepository.findByUsername(authentication.getName())
+                                .orElseThrow(() -> new BadCredentialsException("Invalid username or password"));
 
-        String token = generateToken(user);
+                String accessToken = generateToken(user);
+                String refreshToken = refreshTokenService.issue(user.getId());
 
-        return new LoginResponseDTO(
-                token,
-                "Bearer",
-                900);
-    }
+                return new LoginResponseDTO(
+                                accessToken,
+                                refreshToken,
+                                "Bearer",
+                                900);
+        }
 
-    private JwtClaimsSet buildClaims(User user) {
-        Instant now = Instant.now();
+        @Transactional
+        public LoginResponseDTO refresh(String rawRefreshToken) {
+                RefreshTokenRotationResult result = refreshTokenService.rotate(rawRefreshToken);
 
-        return JwtClaimsSet.builder()
-                .issuer("student-management-api")
-                .subject(String.valueOf(user.getId()))
-                .issuedAt(now)
-                .expiresAt(now.plusSeconds(900))
-                .claim("role", user.getRole().name())
-                .build();
-    }
+                User user = userRepository
+                                .findById(result.userId())
+                                .orElseThrow(() -> new InvalidRefreshTokenException("Invalid refresh token"));
 
-    private String generateToken(User user) {
-        JwtClaimsSet claims = buildClaims(user);
+                String accessToken = generateToken(user);
 
-        JwsHeader header = JwsHeader.with(MacAlgorithm.HS256)
-                .build();
+                return new LoginResponseDTO(
+                                accessToken,
+                                result.refreshToken(),
+                                "Bearer",
+                                900);
+        }
 
-        JwtEncoderParameters parameters = JwtEncoderParameters.from(header, claims);
+        public void logout(String rawRefreshToken) {
+                refreshTokenService.revoke(rawRefreshToken);
+        }
 
-        Jwt jwt = jwtEncoder.encode(parameters);
+        private JwtClaimsSet buildClaims(User user) {
+                Instant now = Instant.now();
 
-        return jwt.getTokenValue();
-    }
+                return JwtClaimsSet.builder()
+                                .issuer("student-management-api")
+                                .subject(String.valueOf(user.getId()))
+                                .issuedAt(now)
+                                .expiresAt(now.plusSeconds(900))
+                                .claim("role", user.getRole().name())
+                                .build();
+        }
+
+        private String generateToken(User user) {
+                JwtClaimsSet claims = buildClaims(user);
+
+                JwsHeader header = JwsHeader.with(MacAlgorithm.HS256)
+                                .build();
+
+                JwtEncoderParameters parameters = JwtEncoderParameters.from(header, claims);
+
+                Jwt jwt = jwtEncoder.encode(parameters);
+
+                return jwt.getTokenValue();
+        }
 }

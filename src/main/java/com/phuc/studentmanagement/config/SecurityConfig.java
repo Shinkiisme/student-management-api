@@ -29,6 +29,10 @@ public class SecurityConfig {
         http.authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.POST, "/auth/login")
                 .permitAll()
+                .requestMatchers(HttpMethod.POST, "/auth/refresh")
+                .permitAll()
+                .requestMatchers(HttpMethod.POST, "/auth/logout")
+                .permitAll()
                 .requestMatchers(HttpMethod.GET, "/students")
                 .hasRole("ADMIN")
                 .requestMatchers(HttpMethod.GET, "/students/{id}")
