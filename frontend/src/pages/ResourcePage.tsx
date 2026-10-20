@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useAsync } from "../hooks/useAsync";
 import { useNotify } from "../hooks/notificationContext";
+import { useAuth } from "../hooks/authContext";
 import type { ListQuery } from "../types/api";
 import type { ResourceConfig } from "../utils/resourceConfig";
 import { initials, integerValue, MAX_INTEGER } from "../utils/validation";
@@ -33,6 +34,7 @@ export function ResourcePage<T extends { id: number; name: string }, P>({
 }: {
   config: ResourceConfig<T, P>;
 }) {
+  const canManage = useAuth().role === "ADMIN";
   const [query, setQuery] = useState<ListQuery>({
     page: 0,
     size: 10,
@@ -104,10 +106,12 @@ export function ResourcePage<T extends { id: number; name: string }, P>({
         title={config.title}
         description={config.description}
         action={
-          <button className="button-primary" onClick={() => setForm({})}>
-            <Plus className="size-4" />
-            Add {config.singular}
-          </button>
+          canManage && (
+            <button className="button-primary" onClick={() => setForm({})}>
+              <Plus className="size-4" />
+              Add {config.singular}
+            </button>
+          )
         }
       />
       <section className="panel" aria-label={`${config.title} directory`}>
@@ -206,19 +210,23 @@ export function ResourcePage<T extends { id: number; name: string }, P>({
                       : "No matching records"
                   }
                   description={
-                    activeFilter === undefined
+                    activeFilter === undefined && canManage
                       ? `Add your first ${config.singular} to get started.`
-                      : `No ${config.kind} have ${config.numericLabel.toLowerCase()} ${activeFilter}. Try another value or clear the filter.`
+                      : activeFilter === undefined
+                        ? `No ${config.kind} are available in the directory.`
+                        : `No ${config.kind} have ${config.numericLabel.toLowerCase()} ${activeFilter}. Try another value or clear the filter.`
                   }
                   action={
                     activeFilter === undefined ? (
-                      <button
-                        className="button-primary"
-                        onClick={() => setForm({})}
-                      >
-                        <Plus className="size-4" />
-                        Add {config.singular}
-                      </button>
+                      canManage && (
+                        <button
+                          className="button-primary"
+                          onClick={() => setForm({})}
+                        >
+                          <Plus className="size-4" />
+                          Add {config.singular}
+                        </button>
+                      )
                     ) : (
                       <button
                         className="button-secondary"
@@ -323,20 +331,24 @@ export function ResourcePage<T extends { id: number; name: string }, P>({
                               >
                                 <Eye className="size-4" />
                               </Link>
-                              <button
-                                className="icon-button"
-                                aria-label={`Edit ${item.name}`}
-                                onClick={() => setForm({ item })}
-                              >
-                                <Pencil className="size-4" />
-                              </button>
-                              <button
-                                className="icon-button hover:bg-red-50 hover:text-red-600"
-                                aria-label={`Delete ${item.name}`}
-                                onClick={() => setDeleting(item)}
-                              >
-                                <Trash2 className="size-4" />
-                              </button>
+                              {canManage && (
+                                <>
+                                  <button
+                                    className="icon-button"
+                                    aria-label={`Edit ${item.name}`}
+                                    onClick={() => setForm({ item })}
+                                  >
+                                    <Pencil className="size-4" />
+                                  </button>
+                                  <button
+                                    className="icon-button hover:bg-red-50 hover:text-red-600"
+                                    aria-label={`Delete ${item.name}`}
+                                    onClick={() => setDeleting(item)}
+                                  >
+                                    <Trash2 className="size-4" />
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -364,7 +376,7 @@ export function ResourcePage<T extends { id: number; name: string }, P>({
           ? "Student codes uniquely identify each student."
           : "Course codes uniquely identify each course."}
       </p>
-      {form && (
+      {canManage && form && (
         <ResourceForm
           config={config}
           item={form.item}
@@ -377,7 +389,7 @@ export function ResourcePage<T extends { id: number; name: string }, P>({
           }}
         />
       )}
-      {deleting && (
+      {canManage && deleting && (
         <ConfirmDialog
           title={`Delete ${config.singular}?`}
           description={`“${deleting.name}” will be permanently removed. ${config.title} with active enrollments cannot be deleted; cancel their enrollments first.`}

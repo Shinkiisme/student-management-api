@@ -41,13 +41,24 @@ function resourceApi<T, P>(path: string): ResourceApi<T, P> {
 
 export const studentsApi = resourceApi<Student, StudentInput>("/students");
 export const coursesApi = resourceApi<Course, CourseInput>("/courses");
+async function legacyEnrollments(
+  path: string,
+  signal?: AbortSignal,
+): Promise<Enrollment[]> {
+  const response = await request<unknown>(path, { signal });
+  if (!Array.isArray(response)) {
+    throw new Error(
+      "This API now returns paginated enrollments. Enrollment list support is deferred to Phase 2.",
+    );
+  }
+  return response as Enrollment[];
+}
 export const enrollmentsApi = {
-  list: (signal?: AbortSignal) =>
-    request<Enrollment[]>("/enrollments", { signal }),
+  list: (signal?: AbortSignal) => legacyEnrollments("/enrollments", signal),
   get: (id: number, signal?: AbortSignal) =>
     request<Enrollment>(`/enrollments/${id}`, { signal }),
   byStudent: (id: number, signal?: AbortSignal) =>
-    request<Enrollment[]>(`/students/${id}/enrollments`, { signal }),
+    legacyEnrollments(`/students/${id}/enrollments`, signal),
   create: (input: EnrollmentInput) =>
     request<Enrollment>("/enrollments", {
       method: "POST",

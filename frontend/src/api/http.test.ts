@@ -45,10 +45,11 @@ describe("HTTP client", () => {
       "/api/students",
       expect.objectContaining({
         method: "POST",
-        headers: expect.objectContaining({
-          "Content-Type": "application/json",
-        }),
+        headers: expect.any(Headers),
       }),
+    );
+    expect(fetch.mock.calls[0][1].headers.get("Content-Type")).toBe(
+      "application/json",
     );
   });
 
@@ -132,6 +133,6 @@ describe("HTTP client", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(error));
     await expect(
       request("/students", { signal: controller.signal }),
-    ).rejects.toBe(error);
+    ).rejects.toMatchObject({ name: "AbortError" });
   });
 });

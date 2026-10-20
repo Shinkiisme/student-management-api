@@ -6,10 +6,14 @@ import {
   GraduationCap,
   LayoutDashboard,
   Link2,
+  LogOut,
   Menu,
   PanelLeftClose,
   Users,
 } from "lucide-react";
+import { useAuth } from "../hooks/authContext";
+import { landingPage } from "../auth/session";
+import { logout } from "../api/auth";
 
 const navigation = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -19,10 +23,11 @@ const navigation = [
 ];
 
 function SidebarContents({ onNavigate }: { onNavigate?: () => void }) {
+  const auth = useAuth();
   return (
     <>
       <Link
-        to="/"
+        to={landingPage(auth.role)}
         onClick={onNavigate}
         className="flex items-center gap-3 px-6 py-7"
       >
@@ -42,20 +47,22 @@ function SidebarContents({ onNavigate }: { onNavigate?: () => void }) {
         WORKSPACE
       </p>
       <nav aria-label="Main navigation" className="space-y-1.5 px-3">
-        {navigation.map(({ to, label, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={to === "/"}
-            onClick={onNavigate}
-            className={({ isActive }) =>
-              `flex items-center gap-3 rounded-lg px-3 py-3 text-sm ${isActive ? "bg-blue-50 font-semibold text-blue-600" : "font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-800"}`
-            }
-          >
-            <Icon className="size-[18px]" />
-            {label}
-          </NavLink>
-        ))}
+        {navigation
+          .filter((item) => auth.role === "ADMIN" || item.to === "/courses")
+          .map(({ to, label, icon: Icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={to === "/"}
+              onClick={onNavigate}
+              className={({ isActive }) =>
+                `flex items-center gap-3 rounded-lg px-3 py-3 text-sm ${isActive ? "bg-blue-50 font-semibold text-blue-600" : "font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-800"}`
+              }
+            >
+              <Icon className="size-[18px]" />
+              {label}
+            </NavLink>
+          ))}
       </nav>
       <div className="mt-auto p-4">
         <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
@@ -76,6 +83,7 @@ function SidebarContents({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 export function AppLayout() {
+  const auth = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const section =
@@ -115,11 +123,19 @@ export function AppLayout() {
               {section}
             </span>
           </div>
-          <span className="flex items-center gap-2 text-xs text-slate-500">
-            <GraduationCap className="size-4 text-blue-500" />
-            <span className="hidden sm:inline">University administration</span>
-            <span className="sm:hidden">Campus</span>
-          </span>
+          <div className="flex items-center gap-2 sm:gap-4">
+            <span className="flex items-center gap-2 text-xs text-slate-500">
+              <GraduationCap className="size-4 text-blue-500" />
+              <span className="hidden sm:inline">
+                {auth.role === "ADMIN" ? "Administrator" : "Student"}
+              </span>
+              <span className="sm:hidden">Campus</span>
+            </span>
+            <button className="button-quiet" onClick={() => void logout()}>
+              <LogOut className="size-4" />
+              Log out
+            </button>
+          </div>
         </header>
         <main
           id="main-content"

@@ -13,6 +13,7 @@ import { enrollmentsApi } from "../api/resources";
 import { useAsync } from "../hooks/useAsync";
 import { useDirectory } from "../hooks/useDirectory";
 import { useNotify } from "../hooks/notificationContext";
+import { useAuth } from "../hooks/authContext";
 import type { ResourceConfig } from "../utils/resourceConfig";
 import { integerValue } from "../utils/validation";
 import { ResourceForm } from "../components/ResourceForm";
@@ -80,6 +81,7 @@ export function ResourceDetailsPage<T extends { id: number; name: string }, P>({
 }: {
   config: ResourceConfig<T, P>;
 }) {
+  const canManage = useAuth().role === "ADMIN";
   const { id: rawId } = useParams();
   const id = integerValue(rawId ?? "", 1);
   const [editing, setEditing] = useState(false);
@@ -114,9 +116,14 @@ export function ResourceDetailsPage<T extends { id: number; name: string }, P>({
           data?.name ??
           `${config.singular === "student" ? "Student" : "Course"} details`
         }
-        description={`View and manage this ${config.singular}’s information.`}
+        description={
+          canManage
+            ? `View and manage this ${config.singular}’s information.`
+            : `View this ${config.singular}’s information.`
+        }
         action={
-          data && (
+          data &&
+          canManage && (
             <div className="flex gap-2">
               <button
                 className="button-secondary"
@@ -181,7 +188,7 @@ export function ResourceDetailsPage<T extends { id: number; name: string }, P>({
           </>
         )
       )}
-      {editing && data && (
+      {canManage && editing && data && (
         <ResourceForm
           key={data.id}
           config={config}
@@ -195,7 +202,7 @@ export function ResourceDetailsPage<T extends { id: number; name: string }, P>({
           }}
         />
       )}
-      {deleting && data && (
+      {canManage && deleting && data && (
         <ConfirmDialog
           title={`Delete ${config.singular}?`}
           description={`“${data.name}” will be permanently removed. Cancel any enrollments first; the API prevents deleting records in use.`}
